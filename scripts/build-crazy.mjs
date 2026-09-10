@@ -20,7 +20,10 @@ const DIST = join(ROOT, 'dist');
 /* What the game is made of. Anything not listed does not ship - an allow-list
    rather than a deny-list, because the deny-list is the one that goes stale the
    day somebody adds a folder. */
-const SHIP_DIRS = ['src', 'data', 'assets'];
+/* ⚠ `public/` carries the privacy policy, and the policy has to be *in* the
+   bundle: the host bans outbound links, so Settings -> Privacy reads the copy
+   that shipped rather than opening theirs. */
+const SHIP_DIRS = ['src', 'data', 'assets', 'public'];
 const SHIP_FILES = ['index.html', 'style.css'];
 
 /* ⚠ Never ship a dev tool. A reviewer finding the test harness is the same
@@ -89,6 +92,12 @@ if (!sdkFiles.length) problems.push('khong co file nao goi SDK CrazyGames');
 
 /* ...and it has to be wired into the page, not merely sitting in the folder. */
 if (!html.includes('src/platform-crazy.js')) problems.push('index.html khong nap platform-crazy.js');
+
+/* The policy is a submission requirement and an in-game screen; missing, it
+   fails review twice over. */
+if (!existsSync(join(DIST, 'public', 'privacy.html'))) {
+  problems.push('thieu public/privacy.html - form nop va man Cai dat deu can no');
+}
 
 /* No dev tool may have hitched a ride. */
 for (const bad of NEVER) {

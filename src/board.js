@@ -1624,8 +1624,13 @@ function freeLeft(id) {
 
 /** what pressing this booster would cost right now */
 function boosterState(id) {
-  if (freeLeft(id) > 0) return { kind: 'free', n: freeLeft(id) };
-  if (save.own(id) > 0) return { kind: 'own', n: save.own(id) };
+  var free = freeLeft(id), own = save.own(id);
+  /* ⚠ One number, counting everything that can be spent right now. Showing
+     the free allowance first and the bag only once it ran out made the badge
+     go *up* when you spent something - 1, press, 2 - and a counter that grows
+     as you use it reads as a bug however true both figures were. */
+  var n = free + own;
+  if (n > 0) return { kind: free > 0 ? 'free' : 'own', n: n };
   return { kind: 'buy', n: 0, price: ECON.PRICE[id] | 0 };
 }
 
@@ -1675,8 +1680,15 @@ function refreshBoosters() {
     }
     btn.classList.toggle('free', st.kind === 'free');
     btn.classList.toggle('buy', st.kind === 'buy');
-    if (st.kind === 'buy') cost.innerHTML = '<i class="coin"></i>' + st.price;
-    else                   badge.textContent = st.n;
+    /* whichever one is not in use has to be emptied, or it keeps showing the
+       last count next to a price that has replaced it */
+    if (st.kind === 'buy') {
+      badge.textContent = '';
+      cost.innerHTML = '<i class="coin"></i>' + st.price;
+    } else {
+      cost.textContent = '';
+      badge.textContent = st.n;
+    }
   });
   el.btnUndo.disabled = !S.history.length;
   if (el.btnAdd) el.btnAdd.disabled = S.extraSlots >= S.cap;

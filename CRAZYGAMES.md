@@ -105,7 +105,7 @@ seconds of backdrop.
 - [ ] Run the portal's **Quality Assurance Tool**, clear every warning
 - [ ] Three covers: 1920×1080 · 800×1200 · 800×800
 - [ ] Two preview videos, 15–20s each
-- [ ] A privacy policy URL, hosted somewhere permanent
+- [x] Privacy policy URL: `https://ballsortcolor-e295a.web.app/privacy.html`
 
 Form answers that have consequences:
 
@@ -119,7 +119,18 @@ Form answers that have consequences:
 | Online game | **no** | no multiplayer |
 
 ⚠ **The privacy link goes in the form, never as an outbound link in the UI.**
-Outbound links are banned.
+Outbound links are banned, so the in-game route is Settings → Privacy policy,
+which shows the copy that ships inside the bundle in a same-origin frame.
+
+If the policy changes it has to be updated in **both** places - the bundle gets
+it from `public/privacy.html` at build time, and the hosted copy needs a deploy:
+
+```bash
+npx firebase-tools deploy --only hosting   # project ballsortcolor-e295a
+```
+
+⚠ **It must match what the game actually collects.** Add so much as one
+analytics call and that page is wrong the same day.
 
 ⚠ **Preview videos: no black bars, no mouse cursor.** Both are on their
 prohibited list. The game is a portrait column and neither store frame is, so

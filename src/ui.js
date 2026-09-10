@@ -248,6 +248,16 @@ function openSettings() {
   openOverlay('#settingsOverlay');
 }
 
+$('#btnPrivacy').onclick = function () {
+  board.sfx('ui');
+  /* ⚠ Not a link, and not a new tab. The host bans outbound links and blocks
+     popups from inside its frame, so the copy that ships with the game is
+     shown in place. Same origin, so it just works. */
+  var f = $('#privacyFrame');
+  if (!f.getAttribute('src')) f.setAttribute('src', 'public/privacy.html');
+  openOverlay('#privacyOverlay');
+};
+
 $('#optAlert').onchange = function () {
   save.setAlerts($('#optAlert').checked);
   board.sfx('ui');

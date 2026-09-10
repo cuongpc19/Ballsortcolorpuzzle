@@ -183,6 +183,17 @@
   </div>
 </div>
 
+<!-- ══════════════════════════ PRIVACY ══════════════════════════ -->
+<!-- ⚠ Read in place, never linked out to. Outbound links are banned on the
+     host, so the policy ships inside the bundle and is shown from the same
+     origin. The frame gets its src on first open, so nobody pays for it. -->
+<div id="privacyOverlay" class="overlay">
+  <div class="panel privacyPanel">
+    <iframe id="privacyFrame" title="Privacy policy"></iframe>
+    <button class="btn ghost wide" data-close>Close</button>
+  </div>
+</div>
+
 <!-- ═════════════════════════ SETTINGS ═════════════════════════ -->
 <div id="settingsOverlay" class="overlay">
   <div class="panel">
@@ -193,6 +204,7 @@
       <label class="sw"><span>💡 Stuck alerts</span><input type="checkbox" id="optAlert" checked><i></i></label>
     </div>
     <button class="btn ghost wide" id="btnQuit">🏠 Back to home</button>
+    <button class="btn ghost wide" id="btnPrivacy">Privacy policy</button>
     <button class="btn danger wide" id="btnReset">Erase all progress</button>
     <button class="btn ghost wide" data-close>Close</button>
   </div>

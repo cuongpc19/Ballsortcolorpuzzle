@@ -1,0 +1,59 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();for(const[k,v]of Object.entries(seed||{}))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),340);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+(async function(){
+  const w = await boot({ bsp_tutor: 9, bsp_max: { classic: 500 }, bsp_coins: 500 });
+  const badge = () => $(w,'#btnAdd .price').textContent;
+  const cost  = () => $(w,'#btnAdd .cost').textContent;
+  const E = w.BS.ECON;
+
+  w.BS.board.start('classic', 40); await sleep(500);
+
+  head('Số trên nút Thêm ống chỉ được giảm, không được tăng');
+  const free = E.FREE_PER_LEVEL.tube, bag = w.BS.save.own('tube');
+  ok(badge() === String(free + bag),
+     'ban đầu = ' + free + ' suất free + ' + bag + ' trong kho = ' + (free+bag), badge());
+
+  const seen = [Number(badge())];
+  for (let k = 0; k < free + bag; k++) {
+    $(w,'#btnAdd').click(); await sleep(320);
+    seen.push(Number(badge()));
+  }
+  ok(seen.every((v,i) => i === 0 || v < seen[i-1] || isNaN(v)),
+     'dãy số giảm dần: ' + seen.join(' → '), seen);
+  ok(seen[seen.length-1] === 0 || badge() === '',
+     'hết thì về 0 rồi nhường chỗ cho giá', [badge(), cost()]);
+
+  head('Hết sạch thì hiện giá, và badge cũ không còn sót lại');
+  w.BS.board.start('classic', 41); await sleep(450);
+  while (Number(badge()) > 0) { $(w,'#btnAdd').click(); await sleep(300); }
+  await sleep(200);
+  ok(badge() === '', 'badge được xoá, không giữ số cũ', badge());
+  ok(/\d/.test(cost()), 'giá hiện ra', cost());
+  ok(cost().includes(String(E.PRICE.tube)), 'đúng giá ' + E.PRICE.tube, cost());
+
+  head('Suất free về lại khi sang màn mới, kho thì không');
+  const bagLeft = w.BS.save.own('tube');
+  w.BS.board.start('classic', 42); await sleep(450);
+  ok(badge() === String(E.FREE_PER_LEVEL.tube + bagLeft),
+     'màn mới = ' + E.FREE_PER_LEVEL.tube + ' free + ' + bagLeft + ' kho', badge());
+
+  out();
+})().catch(e=>{L.push('EXCEPTION: '+e.message+'\n'+e.stack);fail++;out();});
+</script>
