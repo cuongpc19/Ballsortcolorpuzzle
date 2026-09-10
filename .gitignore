@@ -1,0 +1,13 @@
+# The original APK and the phone recording are the *spec* for this clone, not
+# part of it: they are large (97 MB / 9 MB) and are not ours to redistribute.
+# Keep them locally, out of the repo.
+*.xapk
+*.apk
+*.aab
+*.mp4
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/

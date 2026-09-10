@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Ball Sort Puzzle - Color Game</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header id="topbar">
+    <button class="ic" id="btnMenu" title="Chọn màn">☰</button>
+    <div id="levelPill">
+      <span class="lbl">Màn</span>
+      <span id="levelNum">1</span>
+    </div>
+    <div id="modePill">
+      <button class="mode active" data-mode="classic">Cổ điển</button>
+      <button class="mode" data-mode="hard">Khó</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="ic" id="btnSound" title="Bật/tắt tiếng">🔊</button>
+    <div id="moveBox"><span class="lbl">Bước</span> <span id="moveNum">0</span></div>
+  </header>
+
+  <main id="board">
+    <div id="tubes"></div>
+    <div id="balls"></div>
+    <div id="fx"></div>
+  </main>
+
+  <footer id="toolbar">
+    <button class="tool" id="btnUndo"><span class="gl">↺</span><span class="tx">Hoàn tác</span></button>
+    <button class="tool" id="btnRestart"><span class="gl">⟳</span><span class="tx">Chơi lại</span></button>
+    <button class="tool" id="btnAdd"><span class="gl">＋</span><span class="tx">Thêm ống</span><span class="badge" id="addLeft">2</span></button>
+    <button class="tool" id="btnHint"><span class="gl">💡</span><span class="tx">Gợi ý</span></button>
+  </footer>
+
+  <div id="toast"></div>
+  <div id="sky"></div>
+
+  <div id="winOverlay" class="overlay">
+    <div class="winPanel">
+      <div class="rays"></div>
+      <div class="winInner">
+        <div class="winLevel" id="winLevel">Cấp độ 1</div>
+        <h2 class="winTitle">HOÀN THÀNH!</h2>
+
+        <div class="stars">
+          <i class="star" data-i="0">★</i>
+          <i class="star mid" data-i="1">★</i>
+          <i class="star" data-i="2">★</i>
+        </div>
+
+        <div class="praise" id="winPraise">Tuyệt vời!</div>
+
+        <div class="stats">
+          <div class="stat"><b id="stMoves">0</b><span>Số bước</span></div>
+          <div class="stat"><b id="stPar">0</b><span>Chuẩn</span></div>
+          <div class="stat"><b id="stTime">0:00</b><span>Thời gian</span></div>
+          <div class="stat"><b id="stBest">–</b><span>Kỷ lục</span></div>
+        </div>
+
+        <div class="newRec" id="newRec">🏆 Kỷ lục mới!</div>
+
+        <div class="winRow">
+          <button class="btn ghost sq" id="btnReplay" title="Chơi lại">↺</button>
+          <button class="btn primary grow" id="btnNext"><span>Màn tiếp</span> →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="menuOverlay" class="overlay">
+    <div class="panel">
+      <h2>Chọn màn</h2>
+      <p class="sub" id="menuSub"></p>
+      <div class="jump">
+        <input id="levelInput" type="number" min="1" inputmode="numeric" placeholder="Số màn">
+        <button class="btn primary" id="btnJump">Đi</button>
+      </div>
+      <div id="quickList"></div>
+      <div class="settings">
+        <label class="sw"><span>🔔 Âm thanh</span><input type="checkbox" id="optSfx" checked><i></i></label>
+        <label class="sw"><span>🎵 Nhạc nền</span><input type="checkbox" id="optMusic" checked><i></i></label>
+      </div>
+      <button class="btn ghost wide" id="btnCloseMenu">Đóng</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="data/levels-classic.js"></script>
+<script src="data/levels-hard.js"></script>
+<script src="data/par-classic.js"></script>
+<script src="data/par-hard.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
