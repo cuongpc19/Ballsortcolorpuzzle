@@ -155,8 +155,16 @@ function setCurrent(mode, idx) { save.setLevel(mode, idx); }
 
 var AU = {
   ctx: null, master: null, sfxBus: null, musBus: null, echo: null,
-  noise: null, sfxOn: true, musicOn: true, ready: false
+  noise: null, sfxOn: true, musicOn: true, ready: false,
+  /* A host page can silence us, and its switch outranks the one in Settings:
+     the in-game toggle must never be able to bring sound back over a page the
+     player has muted. Kept apart from sfxOn/musicOn so their own preference
+     survives being overridden and comes back when the host unmutes. */
+  hostMute: false
 };
+
+function sfxAudible()   { return AU.sfxOn   && !AU.hostMute; }
+function musicAudible() { return AU.musicOn && !AU.hostMute; }
 
 function audioInit() {
   if (AU.ctx) return true;
@@ -170,7 +178,7 @@ function audioInit() {
   AU.master.connect(c.destination);
 
   AU.sfxBus = c.createGain();
-  AU.sfxBus.gain.value = AU.sfxOn ? 1 : 0;
+  AU.sfxBus.gain.value = sfxAudible() ? 1 : 0;
   AU.sfxBus.connect(AU.master);
 
   AU.musBus = c.createGain();
@@ -201,7 +209,7 @@ function audioInit() {
 function resumeAudio() {
   if (!audioInit()) return;
   if (AU.ctx.state === 'suspended') AU.ctx.resume();
-  if (AU.musicOn) musicStart();
+  if (musicAudible()) musicStart();
 }
 
 /** one synth voice */
@@ -419,7 +427,7 @@ function musicTick() {
 }
 
 function musicStart() {
-  if (!AU.ready || MUS.timer || !AU.musicOn) return;
+  if (!AU.ready || MUS.timer || !musicAudible()) return;
   if (AU.ctx.state === 'suspended') AU.ctx.resume();
   MUS.next = AU.ctx.currentTime + 0.15;
   MUS.step = 0;
@@ -461,15 +469,18 @@ function applyAudioPrefs(persist) {
     el.sound.textContent = (AU.sfxOn || AU.musicOn) ? '🔊' : '🔇';
     el.sound.classList.toggle('off', !AU.sfxOn && !AU.musicOn);
   }
-  if (AU.ready) AU.sfxBus.gain.value = AU.sfxOn ? 1 : 0;
-  if (AU.musicOn) musicStart(); else musicStop();
+  if (AU.ready) AU.sfxBus.gain.value = sfxAudible() ? 1 : 0;
+  if (musicAudible()) musicStart(); else musicStop();
   if (persist) save.setAudio(AU.sfxOn, AU.musicOn);
 }
 
-(function readAudioPrefs() {
+/* Deferred: on a host that hands us the player's save asynchronously, reading
+   these at parse time would pick up the local copy instead of theirs. */
+BS.whenReady(function readAudioPrefs() {
   AU.sfxOn = save.sfxOn();
   AU.musicOn = save.musicOn();
-})();
+  applyAudioPrefs(false);
+});
 
 /* =========================== visual fx ============================== */
 
@@ -2162,6 +2173,14 @@ BS.board = {
   audio: {
     resume: resumeAudio,
     apply: applyAudioPrefs,
+    /** the host page's mute; outranks the in-game toggle both ways */
+    setHostMute: function (v) {
+      v = !!v;
+      if (v === AU.hostMute) return;
+      AU.hostMute = v;
+      applyAudioPrefs(false);
+    },
+    get hostMute() { return AU.hostMute; },
     get sfxOn() { return AU.sfxOn; },
     set sfxOn(v) { AU.sfxOn = v; },
     get musicOn() { return AU.musicOn; },

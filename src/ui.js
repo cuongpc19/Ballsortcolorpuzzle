@@ -290,6 +290,11 @@ document.addEventListener('keydown', function (e) {
 
 /* ============================== start-up ============================ */
 
+/* ⚠ Everything below reads the save, so it waits for the save to be real -
+   see BS.whenReady in save.js. With no host in the picture this runs
+   straight away and nothing about the boot changes. */
+BS.whenReady(function () {
+
 mode = 'classic';
 page = Math.floor(save.level(mode) / PER_PAGE);
 paintWallet();
@@ -313,5 +318,7 @@ if (ECON.DAILY_ENABLED && save.daily().ready) setTimeout(function () {
   if ($$('.overlay.show').length) return;
   openDaily();
 }, 700);
+
+});
 
 })();

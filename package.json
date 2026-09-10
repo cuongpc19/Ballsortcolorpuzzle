@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "start": "node scripts/serve.mjs"
+    "start": "node scripts/serve.mjs",
+    "build:crazy": "node scripts/build-crazy.mjs"
   }
 }

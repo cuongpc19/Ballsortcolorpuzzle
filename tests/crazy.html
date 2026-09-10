@@ -1,0 +1,107 @@
+<!doctype html><meta charset=utf-8>
+<title>Kiểm tra bản build CrazyGames</title>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+/* Kiểm tra BẢN ĐÃ BUILD trong dist/, không phải mã nguồn.
+   Chạy `node scripts/build-crazy.mjs` trước, rồi mở trang này. */
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+
+/* Bản build là một trang riêng, không phải ../index.html */
+function bootDist(qs, seed){return new Promise(res=>{
+  fr.onload=()=>{const w=fr.contentWindow;
+    try{w.localStorage.clear();if(seed)for(const[k,v]of Object.entries(seed))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+    /* ⚠ Phải chờ quá cả hạn nạp SDK (2s) lẫn hạn bắt tay (2,5s), nếu không
+       là kiểm nhầm lúc lớp nền còn chưa gắn xong. */
+    fr.onload=()=>setTimeout(()=>res(fr.contentWindow),3200);
+    w.location.href='../dist/index.html'+(qs||'')+(qs?'&':'?')+'r='+Math.random();};
+  fr.src='../dist/index.html?warm='+Math.random();});}
+
+(async function(){
+  head('Bản build tồn tại và khởi động được');
+  const head1 = await fetch('../dist/index.html').then(r=>r.status).catch(()=>0);
+  ok(head1 === 200, 'dist/index.html có mặt (đã chạy build chưa?)', head1);
+  if (head1 !== 200) { out(); return; }
+
+  let w = await bootDist();
+  ok($(w,'#screenHome').classList.contains('on'), 'khởi động tới màn Home');
+  ok(!!w.BS && !!w.BS.board, 'game đã dựng xong');
+
+  head('Lớp nền CrazyGames được nạp và nạp ĐÚNG CHỖ');
+  ok(w.BS.platform && w.BS.platform.name === 'crazy', 'có lớp nền crazy',
+     w.BS.platform && w.BS.platform.name);
+  const src = await fetch('../dist/index.html').then(r=>r.text());
+  const iPlat = src.indexOf('platform-crazy.js');
+  const iSave = src.indexOf('src/save.js');
+  ok(iPlat > -1, 'index.html có nạp platform-crazy.js');
+  ok(iPlat < iSave, 'và nạp TRƯỚC save.js — nếu sau thì mọi lần ghi đi nhầm chỗ',
+     [iPlat, iSave]);
+  ok(!/<script[^>]+sdk\.crazygames\.com/.test(src),
+     'SDK không nằm trong thẻ script tĩnh (sẽ chặn parser)');
+
+  head('Kho lưu đã đổi sang kho của nền tảng');
+  ok(w.BS.store && w.BS.store !== w.localStorage, 'BS.store là kho riêng, không phải localStorage');
+  w.BS.save.addCoins(7);
+  const c = w.BS.save.coins();
+  ok(typeof c === 'number' && c > 0, 'ghi/đọc ví chạy được', c);
+  ok(w.localStorage.getItem('bsp_coins') === String(c),
+     'không có SDK thì vẫn rơi xuống localStorage', w.localStorage.getItem('bsp_coins'));
+
+  head('Không có SDK vẫn chơi được bình thường');
+  ok(w.BS.platform.hasSdk() === false, 'phiên này quả thật không có SDK');
+  $(w,'#btnPlay').click(); await sleep(700);
+  ok($(w,'#screenGame').classList.contains('on'), 'vào được màn chơi');
+  ok(w.BS.board.ready(), 'bàn cờ dựng xong', w.BS.board.ready());
+  const T = $$(w,'#tubes .tube');
+  ok(T.length > 0, 'có ống trên bàn', T.length);
+  if (w.BS.tutorial && w.BS.tutorial.active()) w.BS.tutorial.stop(true);
+  await sleep(80);
+  const mv = w.BS.board.nextMove();
+  const m0 = w.BS.board.moves();
+  T[mv.from].click(); await sleep(60); T[mv.to].click(); await sleep(420);
+  ok(w.BS.board.moves() === m0 + 1, 'đi được một nước', w.BS.board.moves() - m0);
+
+  head('Nút tắt tiếng của trang chủ đè lên nút trong game');
+  w = await bootDist('?muteAudio=true');
+  ok(w.BS.platform.hostMuted() === true, 'đọc được cờ muteAudio trên URL',
+     w.BS.platform.hostMuted());
+  ok(w.BS.board.audio.hostMute === true, 'game đã nhận lệnh tắt tiếng',
+     w.BS.board.audio.hostMute);
+  w.BS.board.audio.sfxOn = true;
+  w.BS.board.audio.musicOn = true;
+  w.BS.board.audio.apply(false);
+  ok(w.BS.board.audio.hostMute === true,
+     'bật tiếng trong game KHÔNG gỡ được lệnh tắt của trang chủ');
+  w.BS.board.audio.setHostMute(false);
+  ok(w.BS.board.audio.hostMute === false, 'trang chủ bỏ tắt thì game nghe lại được');
+
+  head('Không có gì của lập trình viên lọt vào bản build');
+  for (const p of ['tests/crazy.html','tests/game.html','scripts/build-crazy.mjs',
+                   'README.md','Manythings/PROMPTS-UI.md']) {
+    const st = await fetch('../dist/' + p).then(r=>r.status).catch(()=>0);
+    ok(st === 404, p + ' không có trong dist', st);
+  }
+
+  head('Mọi file trang cần đều có thật');
+  const wants = [...src.matchAll(/(?:src|href)="(?!https?:|data:|#)([^"]+)"/g)].map(m=>m[1]);
+  ok(wants.length >= 8, 'trang cần ' + wants.length + ' file cục bộ', wants.length);
+  let miss = [];
+  for (const p of wants) {
+    const st = await fetch('../dist/' + p.split('?')[0]).then(r=>r.status).catch(()=>0);
+    if (st !== 200) miss.push(p + '=' + st);
+  }
+  ok(miss.length === 0, 'tất cả đều tải được', miss);
+
+  out();
+})().catch(e=>{L.push('EXCEPTION: '+e.message+'\n'+e.stack);fail++;out();});
+</script>

@@ -98,14 +98,38 @@ var ECON = BS.ECON = {
 
 /* --------------------------------- storage ------------------------------ */
 
+/* Every read and write goes through one swappable store, so a host that keeps
+ * the player's progress in its own cloud can stand in for the browser's. A
+ * build with such a host installs `BS.store` before this file runs; otherwise
+ * this is it - wrapped, because localStorage throws outright in private mode
+ * and in some sandboxed frames rather than merely failing to persist.
+ */
+var store = BS.store || (BS.store = {
+  getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+});
+
+/* Run `fn` once the player's real save is in hand.
+ *
+ * ⚠ On a host that keeps progress in the cloud, that save arrives *during* the
+ * host's own init - so anything that reads storage before this resolves gets
+ * the local copy, and the next write pushes that stale copy over their real
+ * one. Where there is no host, `BS.ready` is absent and this is a plain call.
+ */
+BS.whenReady = function (fn) {
+  if (BS.ready && BS.ready.then) BS.ready.then(fn, fn);
+  else fn();
+};
+
 function read(key, dflt) {
   try {
-    var v = localStorage.getItem(key);
-    return v === null ? dflt : JSON.parse(v);
+    var v = store.getItem(key);
+    return (v === null || v === undefined) ? dflt : JSON.parse(v);
   } catch (e) { return dflt; }
 }
 function write(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  try { store.setItem(key, JSON.stringify(value)); } catch (e) {}
 }
 
 /** one level's slot in the stars / best maps */
@@ -396,8 +420,8 @@ var save = BS.save = {
 
   /** wipe everything - used by the settings screen */
   reset: function () {
-    for (var k in K) { try { localStorage.removeItem(K[k]); } catch (e) {} }
-    try { localStorage.removeItem('ballsort.progress.v1'); } catch (e) {}
+    for (var k in K) store.removeItem(K[k]);
+    store.removeItem('ballsort.progress.v1');
   }
 };
 
