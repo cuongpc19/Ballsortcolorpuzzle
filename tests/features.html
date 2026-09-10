@@ -1,0 +1,197 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();if(seed)for(const[k,v]of Object.entries(seed))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),340);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+(async function(){
+  let w = await boot({ bsp_tutor: 9, bsp_max: { classic: 2000 } });
+  const B = () => w.BS.board;
+  const S = () => w.BS.save;
+  const D = () => w.BS.dda;
+  const T = () => $$(w,'#tubes .tube');
+  const open = async (lv) => { B().start('classic', lv - 1); await sleep(430); };
+
+  /* ════════════════════ báo bế tắc ════════════════════ */
+  head('Báo bế tắc — nhận diện đúng');
+
+  /* anyMove() phải khớp với một lượt quét độc lập trên bàn cờ thật */
+  let agree = 0, checked = 0;
+  for (const lv of [9, 12, 25, 40]) {
+    await open(lv);
+    for (let step = 0; step < 5; step++) {
+      const st = B().state(), cap = 4;
+      let mine = false;
+      for (let i = 0; i < st.length && !mine; i++) {
+        if (!st[i].length) continue;
+        const c = st[i][st[i].length-1];
+        for (let j = 0; j < st.length; j++) {
+          if (i === j || st[j].length >= cap) continue;
+          if (!st[j].length || st[j][st[j].length-1] === c) { mine = true; break; }
+        }
+      }
+      checked++;
+      if (mine === B().stuck.anyMove()) agree++;
+      const mv = B().nextMove(); if (!mv) break;
+      T()[mv.from].click(); await sleep(30);
+      T()[mv.to].click(); await sleep(230);
+    }
+  }
+  ok(checked > 10, 'kiểm được ' + checked + ' thế cờ thật', checked);
+  ok(agree === checked, 'anyMove() khớp với quét tay ở mọi thế', agree + '/' + checked);
+
+  head('Bảng báo và nút Got it');
+  await open(9);
+  ok(!B().stuck.open(), 'chưa kẹt thì không hiện bảng');
+  B().stuck.show('none'); await sleep(150);
+  ok(B().stuck.open(), 'gọi báo kẹt thì bảng hiện ra');
+  ok($(w,'#stuckOverlay .stuckArt') !== null, 'bảng có ảnh minh hoạ');
+  ok($$(w,'#stuckOverlay .ways li').length === 3, 'liệt kê 3 lối ra', $$(w,'#stuckOverlay .ways li').length);
+  const ways = $(w,'#stuckOverlay .ways').textContent.toLowerCase();
+  ok(/undo/.test(ways) && /restart/.test(ways) && /home/.test(ways),
+     'ba lối là hoàn tác/booster, chơi lại, về Home', ways.slice(0,90));
+  $(w,'#stuckOk').click(); await sleep(200);
+  ok(!B().stuck.open(), 'bấm Got it thì bảng đóng');
+
+  head('Tắt được trong Cài đặt');
+  ok($(w,'#optAlert') !== null, 'có công tắc trong Cài đặt');
+  ok(S().alertsOn() === true, 'mặc định bật');
+  S().setAlerts(false);
+  B().stuck.check(); await sleep(1200);
+  ok(!B().stuck.open(), 'tắt rồi thì không tự hiện nữa');
+  S().setAlerts(true);
+  ok(S().alertsOn() === true, 'bật lại được');
+
+  /* ════════════════════ đánh dấu màn khó ════════════════════ */
+  head('Nhãn màn khó — tính theo kỷ lục của riêng người chơi');
+  ok(D().tier(2, 9, false) === 0, 'mấy màn đầu không gắn nhãn (dưới mốc)', D().tier(2, 9, false));
+  D().setPeak(0);
+  ok(D().tier(30, 9, false) === 0, 'chưa thắng màn nào thì chưa có gì để so', D().tier(30, 9, false));
+  D().setPeak(7);
+  ok(D().tier(30, 9, false) === 1, '9 màu > kỷ lục 7 → HARD', D().tier(30, 9, false));
+  ok(D().tier(30, 7, false) === 0, '7 màu = kỷ lục 7 → thường', D().tier(30, 7, false));
+  ok(D().tier(30, 5, false) === 0, 'ít màu hơn kỷ lục → thường', D().tier(30, 5, false));
+  ok(D().tier(30, 9, true) === 2, '9 màu + úp bi → SUPER', D().tier(30, 9, true));
+  ok(D().tier(30, 7, true) === 1, 'bằng kỷ lục nhưng úp bi → HARD', D().tier(30, 7, true));
+  D().setPeak(12);
+  ok(D().tier(200, 12, false) === 0, 'người chơi đã quen 12 màu thì 12 màu là thường', D().tier(200, 12, false));
+
+  head('Nhãn hiện đúng trên thanh trên, và lọ bóng hơn');
+  D().setPeak(7);
+  await open(31);                                   /* 9 màu */
+  ok(B().tier() === 1, 'màn 31 là HARD với người kỷ lục 7 màu', B().tier());
+  ok($(w,'#levelTag').hidden === false, 'nhãn hiện ra');
+  ok($(w,'#levelTag').textContent === 'HARD', 'ghi HARD', $(w,'#levelTag').textContent);
+  ok($(w,'#tubes').classList.contains('hard'), 'lọ được đánh dấu bóng hơn');
+  ok(w.getComputedStyle($(w,'#levelPill .lbl')).display === 'none',
+     'chữ "Level" nhường chỗ cho nhãn nên không đụng nút Chơi lại');
+  D().setPeak(12);
+  await open(31);
+  ok(B().tier() === 0, 'cùng màn đó với người quen 12 màu thì là thường', B().tier());
+  ok($(w,'#levelTag').hidden === true, 'nhãn biến mất');
+  ok(!$(w,'#tubes').classList.contains('hard'), 'lọ trở lại bình thường');
+
+  head('Màn úp bi luôn được coi là khó hơn');
+  D().setPeak(12);
+  await open(18);                                   /* 7 màu + úp bi */
+  ok(B().question.on(), 'màn 18 đúng là màn úp bi');
+  ok(B().tier() >= 1, 'nên vẫn được gắn nhãn', B().tier());
+
+  /* ════════════════════ bi xu ════════════════════ */
+  head('Bi xu — chỉ từ màn 5, và cố định theo màn');
+  let coinLv = 0, none = true;
+  for (let lv = 1; lv <= 4 && none; lv++) { await open(lv); if (B().lucky()) none = false; }
+  ok(none, 'màn 1–4 không bao giờ có bi xu');
+  for (let lv = 5; lv <= 60 && !coinLv; lv++) { await open(lv); if (B().lucky()) coinLv = lv; }
+  ok(coinLv > 0, 'tìm thấy màn có bi xu trong 60 màn đầu: màn ' + coinLv, coinLv);
+
+  if (coinLv) {
+    await open(coinLv);
+    const worth = B().lucky();
+    ok([10,20].includes(worth), 'đáng 10 hoặc 20 xu', worth);
+    ok($$(w,'.ball .ballCoin').length === 1, 'đúng một bi đeo xu', $$(w,'.ball .ballCoin').length);
+    await open(1); await open(coinLv);
+    ok(B().lucky() === worth, 'mở lại vẫn đúng màn đó, đúng giá đó', B().lucky());
+
+    head('Nhặt được, và chỉ nhặt được một lần');
+    const before = S().coins();
+    /* đi cho tới khi viên đeo xu rời ống */
+    for (let k = 0; k < 30 && B().lucky(); k++) {
+      const mv = B().nextMove(); if (!mv) break;
+      T()[mv.from].click(); await sleep(30);
+      T()[mv.to].click(); await sleep(240);
+    }
+    ok(B().lucky() === null, 'xu đã được nhặt', B().lucky());
+    ok(S().coins() === before + worth, 'ví cộng đúng ' + worth + ' xu',
+       S().coins() - before);
+    ok($$(w,'.ball .ballCoin:not(.off)').length === 0, 'xu biến khỏi bàn cờ');
+    const after = S().coins();
+    await open(coinLv);
+    ok(B().lucky() === null, 'chơi lại màn đó thì không còn xu nữa', B().lucky());
+    ok(S().coins() === after, 'và ví không tăng thêm', S().coins() - after);
+  }
+
+  /* ════════════════════ bỏ qua màn ════════════════════ */
+  head('Bỏ qua màn — mở sau màn 15, và phải kiếm được');
+  w = await boot({ bsp_tutor: 9, bsp_max: { classic: 2000 } });
+  const E = w.BS.ECON;
+  ok(E.SKIP_FROM === 15, 'mốc mở là màn 16', E.SKIP_FROM + 1);
+  w.BS.save.setAlerts(true);
+  w.BS.board.start('classic', 19); await sleep(430);
+  ok(!w.BS.board.skip.allowed(), 'chưa kiếm được suất nào thì chưa dùng được');
+  ok($(w,'#btnSkip').hidden === true, 'nút cũng chưa hiện');
+
+  /* thắng đủ số lần thì được một suất */
+  let got = false, tries = 0;
+  while (!got && tries < 10) { got = w.BS.save.skipWin(); tries++; }
+  ok(got, 'thắng ' + tries + ' màn thì được 1 suất (mốc ' + E.SKIP_WINS.join('–') + ')', tries);
+  ok(tries >= E.SKIP_WINS[0] && tries <= E.SKIP_WINS[1],
+     'số lần thắng nằm trong khoảng đã định', tries);
+  ok(w.BS.save.skipWin() === false, 'đang có 1 suất thì không cộng thêm nữa');
+
+  head('Vẫn khoá ở màn trước mốc');
+  w.BS.board.start('classic', 5); await sleep(430);
+  ok(!w.BS.board.skip.allowed(), 'màn 6 thì dù có suất cũng chưa mở');
+  ok($(w,'#btnSkip').hidden === true, 'nút vẫn ẩn');
+
+  head('Hỏi trước khi bỏ qua');
+  w.BS.board.start('classic', 19); await sleep(430);
+  ok(w.BS.board.skip.allowed(), 'màn 20 + có suất → dùng được');
+  ok($(w,'#btnSkip').hidden === false, 'nút hiện ra');
+  $(w,'#btnSkip').click(); await sleep(220);
+  ok($(w,'#skipOverlay').classList.contains('show'), 'bấm thì hỏi trước, không bỏ qua luôn');
+  ok(w.BS.board.index() === 19, 'vẫn đang ở màn 20', w.BS.board.index() + 1);
+  $(w,'#skipOverlay [data-close]').click(); await sleep(200);
+  ok(!$(w,'#skipOverlay').classList.contains('show'), 'bấm "Keep playing" thì đóng lại');
+  ok(w.BS.save.skipReady(), 'và suất vẫn còn nguyên');
+
+  head('Đồng ý thì sang màn, nhưng không được sao hay xu');
+  const c0 = w.BS.save.coins(), sc0 = w.BS.dda.state().score;
+  $(w,'#btnSkip').click(); await sleep(200);
+  $(w,'#skipYes').click(); await sleep(700);
+  ok(w.BS.board.index() === 20, 'đã sang màn 21', w.BS.board.index() + 1);
+  ok(w.BS.save.max('classic') >= 20, 'màn 21 được mở khoá', w.BS.save.max('classic'));
+  ok(w.BS.save.stars('classic', 19) === 0, 'màn bị bỏ qua không có sao',
+     w.BS.save.stars('classic', 19));
+  ok(w.BS.save.coins() === c0, 'không trả xu', w.BS.save.coins() - c0);
+  ok(!w.BS.save.skipReady(), 'suất đã dùng hết');
+  ok($(w,'#btnSkip').hidden === true, 'nút ẩn lại');
+  ok(w.BS.dda.state().score < sc0, 'DDA hiểu là màn đó thắng mình', [sc0, w.BS.dda.state().score]);
+
+  out();
+})().catch(e=>{L.push('EXCEPTION: '+e.message+'\n'+e.stack);fail++;out();});
+</script>

@@ -1,5 +1,5 @@
-/* The shell around the board: home, level select, shop, daily reward,
- * settings, and the router that moves between them.
+/* The shell around the board: home, level select, daily reward, settings,
+ * and the router that moves between them.
  *
  * The board owns the puzzle and nothing else; everything here talks to it
  * through `BS.board` and to storage through `BS.save`.
@@ -43,13 +43,12 @@ function show(name) {
 }
 
 BS.on('goHome', function () { show('home'); });
-BS.on('needShop', function () { openShop(); });
 
 /* ============================== wallet ============================== */
 
 function paintWallet(v) {
   var n = (v === undefined) ? save.coins() : v;
-  $$('.coinNum').forEach(function (e) { e.textContent = n.toLocaleString('vi-VN'); });
+  $$('.coinNum').forEach(function (e) { e.textContent = n.toLocaleString('en-US'); });
 }
 BS.on('coins', paintWallet);
 
@@ -64,7 +63,7 @@ BS.on('coinFly', function (from) {
   var b = target.getBoundingClientRect();
   for (var i = 0; i < 9; i++) {
     var c = document.createElement('i');
-    c.textContent = '🪙';
+    c.className = 'coin';
     c.style.left = (a.left + a.width / 2) + 'px';
     c.style.top = (a.top + a.height / 2) + 'px';
     host.appendChild(c);
@@ -83,18 +82,12 @@ BS.on('coinFly', function (from) {
 
 /* =============================== home =============================== */
 
+/* Home is deliberately down to one number: which level you are on. The
+   progress bar, the cleared count and the mode switch all moved out - level
+   select still carries the mode switch for anyone who wants Hard. */
 function paintHome() {
-  var idx = save.level(mode);
-  var total = board.count(mode);
-  $('#homeLevel').textContent = 'Cấp độ ' + (idx + 1);
-  $('#homeCleared').textContent = save.cleared(mode).toLocaleString('vi-VN') +
-                                  ' / ' + total.toLocaleString('vi-VN') + ' màn';
-  $('#homeStars').textContent = '★ ' + save.totalStars(mode).toLocaleString('vi-VN');
-  $('#homeBar').style.width = Math.max(1.5, (save.cleared(mode) / total) * 100) + '%';
-  $$('#homeMode .mode').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.mode === mode);
-  });
-  $('#dailyDot').classList.toggle('on', save.daily().ready);
+  $('#homeLevel').textContent = (save.level(mode) + 1).toLocaleString('en-US');
+  $('#dailyDot').classList.toggle('on', ECON.DAILY_ENABLED && save.daily().ready);
   paintWallet();
 }
 
@@ -108,19 +101,9 @@ $('#btnPlay').onclick = function () {
   board.sfx('ui');
   play(mode, save.level(mode));
 };
-$('#btnLevels').onclick   = function () { board.sfx('ui'); show('levels'); };
 $('#btnDaily').onclick    = function () { board.sfx('ui'); openDaily(); };
-$('#btnShop').onclick     = function () { board.sfx('ui'); openShop(); };
+if (!ECON.DAILY_ENABLED) $('#btnDaily').hidden = true;
 $('#btnSettings').onclick = function () { board.sfx('ui'); openSettings(); };
-
-$$('#homeMode .mode').forEach(function (b) {
-  b.onclick = function () {
-    mode = b.dataset.mode;
-    board.sfx('ui');
-    page = Math.floor(save.level(mode) / PER_PAGE);
-    paintHome();
-  };
-});
 
 /* =========================== level select =========================== */
 
@@ -131,8 +114,8 @@ function paintLevels() {
 
   var from = page * PER_PAGE;
   var to = Math.min(total, from + PER_PAGE);
-  $('#lvRange').textContent = (from + 1).toLocaleString('vi-VN') + ' – ' +
-                              to.toLocaleString('vi-VN');
+  $('#lvRange').textContent = (from + 1).toLocaleString('en-US') + ' – ' +
+                              to.toLocaleString('en-US');
   $('#lvPrev').disabled = page === 0;
   $('#lvNext').disabled = page >= pages - 1;
   $$('#lvMode .mode').forEach(function (b) {
@@ -158,14 +141,11 @@ function levelTile(i) {
   var b = document.createElement('button');
   b.className = 'lvTile' + (locked ? ' locked' : '') + (isNext ? ' next' : '') +
                 (stars ? ' done' : '');
-  b.innerHTML = '<b>' + (i + 1) + '</b>' +
-    (locked ? '<i class="lock">🔒</i>'
-            : '<i class="st">' + '★★★'.slice(0, stars) +
-              '<em>' + '★★★'.slice(0, 3 - stars) + '</em></i>');
+  b.innerHTML = '<b>' + (i + 1) + '</b>' + (locked ? '<i class="lock">🔒</i>' : '');
   b.onclick = function () {
     if (locked) {
       board.sfx('deny');
-      board.toast('Qua màn ' + (save.max(mode) + 1) + ' để mở khoá');
+      board.toast('Clear level ' + (save.max(mode) + 1) + ' to unlock this');
       return;
     }
     board.sfx('ui');
@@ -191,7 +171,7 @@ function jump() {
   var i = Math.min(Math.max(1, n), board.count(mode)) - 1;
   if (save.locked(mode, i)) {
     board.sfx('deny');
-    board.toast('Màn ' + (i + 1) + ' chưa mở khoá');
+    board.toast('Level ' + (i + 1) + ' is still locked');
     page = Math.floor(save.max(mode) / PER_PAGE);
     paintLevels();
     return;
@@ -226,6 +206,7 @@ $$('.overlay').forEach(function (o) {
 /* ---------------------------- daily reward --------------------------- */
 
 function openDaily() {
+  if (!ECON.DAILY_ENABLED) return;
   var st = save.daily();
   var row = $('#dayRow');
   row.innerHTML = '';
@@ -235,14 +216,15 @@ function openDaily() {
     var taken = day < st.day || (day === st.day && !st.ready);
     d.className = 'day' + (taken ? ' taken' : '') +
                   (day === st.day && st.ready ? ' now' : '');
-    d.innerHTML = '<span>Ngày ' + day + '</span><b>🪙 ' + coins + '</b>' +
+    d.innerHTML = '<span>Day ' + day + '</span><b><i class="coin"></i> ' + coins + '</b>' +
                   (taken ? '<i class="tick">✓</i>' : '');
     row.appendChild(d);
   });
   var btn = $('#btnClaim');
   btn.disabled = !st.ready;
-  btn.textContent = st.ready ? ('Nhận 🪙 ' + (ECON.DAILY_COINS[st.day - 1] || 0))
-                             : 'Mai quay lại nhé';
+  btn.innerHTML = st.ready
+    ? 'Claim <i class="coin"></i> ' + (ECON.DAILY_COINS[st.day - 1] || 0)
+    : 'Come back tomorrow';
   openOverlay('#dailyOverlay');
 }
 
@@ -250,63 +232,46 @@ $('#btnClaim').onclick = function () {
   var got = save.claimDaily();
   if (!got) return;
   board.sfx('coin');
-  board.banner('+' + got + ' 🪙', 42, 1400);
+  board.banner('+' + got + ' <i class="coin"></i>', 42, 1400);
   board.fireworks(3, 220);
   BS.emit('coinFly', $('#btnClaim'));
   openDaily();
   paintHome();
 };
 
-/* -------------------------------- shop ------------------------------- */
-
-function openShop() {
-  var list = $('#shopList');
-  list.innerHTML = '';
-  ECON.PACKS.forEach(function (pack, i) {
-    var own = save.own(pack.id);
-    var afford = save.coins() >= pack.price;
-    var row = document.createElement('div');
-    row.className = 'shopItem';
-    row.innerHTML =
-      '<b class="si">' + pack.icon + '</b>' +
-      '<span class="sn">' + pack.name + '<em>Đang có: ' + own + '</em></span>' +
-      '<button class="btn primary buy"' + (afford ? '' : ' disabled') + '>' +
-      '+' + pack.qty + ' · 🪙' + pack.price + '</button>';
-    row.querySelector('.buy').onclick = function () {
-      if (!save.buyPack(i)) {
-        board.sfx('deny');
-        board.toast('Không đủ xu');
-        return;
-      }
-      board.sfx('coin');
-      openShop();
-      paintWallet();
-    };
-    list.appendChild(row);
-  });
-  paintWallet();
-  openOverlay('#shopOverlay');
-}
-
 /* ------------------------------ settings ----------------------------- */
 
 function openSettings() {
   $('#optSfx').checked = board.audio.sfxOn;
   $('#optMusic').checked = board.audio.musicOn;
-  $('#setInfo').textContent =
-    'Cổ điển: ' + save.cleared('classic').toLocaleString('vi-VN') + ' màn · ★ ' +
-    save.totalStars('classic') + '   |   Khó: ' +
-    save.cleared('hard').toLocaleString('vi-VN') + ' màn · ★ ' + save.totalStars('hard');
+  $('#optAlert').checked = save.alertsOn();
   openOverlay('#settingsOverlay');
 }
 
+$('#optAlert').onchange = function () {
+  save.setAlerts($('#optAlert').checked);
+  board.sfx('ui');
+  board.toast($('#optAlert').checked
+    ? 'You will be told when the board is stuck'
+    : 'No more stuck alerts');
+};
+
 $('#btnReset').onclick = function () {
-  if (!window.confirm('Xoá toàn bộ tiến độ, xu và vật phẩm? Không thể hoàn tác.')) return;
+  if (!window.confirm('Erase all progress, coins and items? This cannot be undone.')) return;
   save.reset();
   location.reload();
 };
 
 /* ============================ back buttons ========================== */
+
+/* the game screen has no back arrow any more: the gear opens settings, and
+   settings is where you leave the level from */
+$('#btnGameSet').onclick = function () { board.sfx('ui'); openSettings(); };
+$('#btnQuit').onclick = function () {
+  board.sfx('ui');
+  closeOverlay($('#settingsOverlay'));
+  show('home');
+};
 
 $$('[data-back]').forEach(function (b) {
   b.onclick = function () {
@@ -342,7 +307,7 @@ if (save.seen()) {
    but only offer it, never force it, and never on top of something else.
    A first-timer who taps PLAY inside that second is mid-walkthrough, and a
    reward card over the lesson buries the one thing they need to read. */
-if (save.daily().ready) setTimeout(function () {
+if (ECON.DAILY_ENABLED && save.daily().ready) setTimeout(function () {
   if (current !== 'home') return;
   if (BS.tutorial && BS.tutorial.active()) return;
   if ($$('.overlay.show').length) return;

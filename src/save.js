@@ -24,20 +24,32 @@ var K = {
   daily:  'bsp_daily',    /* {streak, last: 'YYYY-MM-DD'}                  */
   seen:   'bsp_seen',     /* has the home screen been shown once           */
   tutor:  'bsp_tutor',    /* has the level-1 walkthrough been finished     */
-  bag:    'bsp_bag'       /* {undo,tube,hint} - boosters owned             */
+  dda:    'bsp_dda',      /* {score, group, last, recent[]} - see dda.js   */
+  pick:   'bsp_pick',     /* {c500: 501} - which puzzle a level was given  */
+  bag:    'bsp_bag',      /* {undo,tube,hint} - boosters owned             */
+  alert:  'bsp_alert',    /* stuck alerts on or off                        */
+  lucky:  'bsp_lucky',    /* {c8: 1} - lucky coins already banked          */
+  skip:   'bsp_skip'      /* {wins, need, ready} - skip bookkeeping        */
 };
 
 /* --------------------------------- economy ------------------------------ */
 
 var ECON = BS.ECON = {
-  START_COINS: 300,
-  /* A win pays this, plus a bonus per star above the first: 10 / 15 / 20.
-     Read it against the prices below - two clean wins buy a hint, six buy an
-     extra tube, so a booster is a real decision rather than a free tap. */
+  /* A new player starts broke: the first coins have to be won. */
+  START_COINS: 0,
+  /* Every win pays the same flat 10, stars or not. Read it against the prices
+     below: one win buys an undo, five buy an extra tube, so a booster is a
+     real decision rather than a free tap. */
   WIN_COINS: 10,
-  STAR_BONUS: 5,
+  STAR_BONUS: 0,
   /* Coming back day after day pays far more than playing does, which is the
-     point: it is the reason to open the game tomorrow. */
+     point: it is the reason to open the game tomorrow.
+
+     ⚠ Switched off for now (2026-09-10). The card, the streak and the claim
+     all still work — flip this back to true and the button, the badge and the
+     arrival prompt come back with it. Nothing is deleted, so a player who
+     already had a streak keeps it. */
+  DAILY_ENABLED: false,
   DAILY_COINS: [100, 150, 250],
   /* ---------------------------------------------------------------------
    * Boosters follow the shape the original APK uses, which its IL2CPP
@@ -59,12 +71,29 @@ var ECON = BS.ECON = {
   START_BAG:  { undo: 5, tube: 2, hint: 3 },
   /** free uses granted at the start of every level, before the bag is touched */
   FREE_PER_LEVEL: { undo: 0, tube: 1, hint: 1 },
-  /** what the shop sells: coins -> how many of the booster */
-  PACKS: [
-    { id: 'undo', icon: '↺',  name: 'Hoàn tác', qty: 3, price: 30 },
-    { id: 'tube', icon: '＋', name: 'Thêm ống', qty: 2, price: 60 },
-    { id: 'hint', icon: '💡', name: 'Gợi ý',    qty: 3, price: 45 }
-  ]
+  /** coins for one use, once the free allowance and the bag are both empty */
+  PRICE: { undo: 10, tube: 50, hint: 15 },
+  /* ⚠ Restart is FREE for now: nothing reads this. Wire it back up in
+     board.js askRestart() to start charging again. */
+  REPLAY_COST: 50,
+
+  /* ---------------------------------------------------------------------
+   * Lucky coin. The original's numbers exactly, from the one config whose
+   * default ships switched on:
+   *   {"enable":true,"start":5,"probability":0.1,"coins":[10,20],
+   *    "limit":3000,"limit_prob":0.05}
+   * ------------------------------------------------------------------- */
+  LUCKY_FROM: 4,                 /* 0-based, so level 5                    */
+  LUCKY_PROB: 0.10,
+  LUCKY_COINS: [10, 20],
+  LUCKY_LIMIT: 3000,             /* a fat wallet needs the coin less...    */
+  LUCKY_LIMIT_PROB: 0.05,        /* ...so the odds halve                   */
+
+  /* Skip is earned, never sold - the original hands one out every few wins
+     (`SkiplevelConfig`: startlevel 3, wintimes [4,6]) rather than putting it
+     in the shop, which keeps it a mercy instead of a shortcut you can buy. */
+  SKIP_FROM: 15,                 /* 0-based, so it opens at level 16       */
+  SKIP_WINS: [4, 6],
 };
 
 /* --------------------------------- storage ------------------------------ */
@@ -99,6 +128,16 @@ function slot(mode, index) { return mode.charAt(0) + index; }
     if (m) best[slot(m[1], +m[2])] = old[k];
   }
   if (Object.keys(best).length) write(K.best, best);
+})();
+
+/* ⚠ ONE-SHOT (2026-09-10): the test build handed out 10.000 coins, so a
+   browser that ran it is still carrying them. Pull every wallet back to
+   START_COINS once. Safe to delete once no test device is left - level
+   progress is untouched either way. */
+(function resetTestWallet() {
+  if (read('bsp_wallet_v2', 0)) return;
+  write('bsp_wallet_v2', 1);
+  write(K.coins, ECON.START_COINS);
 })();
 
 /* --------------------------------- api ---------------------------------- */
@@ -145,6 +184,57 @@ var save = BS.save = {
     var m = read(K.stars, {}), n = 0, pre = mode.charAt(0);
     for (var k in m) if (k.charAt(0) === pre) n++;
     return n;
+  },
+
+  /* ------- stuck alerts ------- */
+
+  /* `NoMoveAlertPrefsKey` in the original, and a switch in its settings too:
+     some people would rather be left to work it out. */
+  alertsOn: function () { return read(K.alert, true) !== false; },
+  setAlerts: function (v) { write(K.alert, !!v); },
+
+  /* ------- lucky coins ------- */
+
+  luckyTaken: function (mode, index) {
+    return read(K.lucky, {})[slot(mode, index)] === 1;
+  },
+  /** bank the coin for this level; pays once ever, so replaying earns nothing */
+  takeLucky: function (mode, index, coins) {
+    var m = read(K.lucky, {}), s = slot(mode, index);
+    if (m[s] === 1) return 0;
+    m[s] = 1;
+    write(K.lucky, m);
+    save.addCoins(coins);
+    return coins;
+  },
+
+  /* ------- the skip credit ------- */
+
+  skipState: function () {
+    var s = read(K.skip, null);
+    if (!s) { s = { wins: 0, need: ECON.SKIP_WINS[0], ready: false }; write(K.skip, s); }
+    return s;
+  },
+  skipReady: function () { return save.skipState().ready === true; },
+  /** a win moves the counter along; true when it has just earned a skip */
+  skipWin: function () {
+    var s = save.skipState();
+    if (s.ready) return false;              /* one in hand is the ceiling */
+    s.wins++;
+    if (s.wins < s.need) { write(K.skip, s); return false; }
+    s.ready = true;
+    s.wins = 0;
+    s.need = ECON.SKIP_WINS[0] + Math.floor(Math.random() *
+             (ECON.SKIP_WINS[1] - ECON.SKIP_WINS[0] + 1));
+    write(K.skip, s);
+    return true;
+  },
+  useSkip: function () {
+    var s = save.skipState();
+    if (!s.ready) return false;
+    s.ready = false;
+    write(K.skip, s);
+    return true;
   },
 
   /* ------- the wallet ------- */
@@ -210,9 +300,43 @@ var save = BS.save = {
   seen: function () { return read(K.seen, false) === true; },
   setSeen: function () { write(K.seen, true); },
 
-  /** the level-1 walkthrough only ever runs once */
-  tutorDone: function () { return read(K.tutor, false) === true; },
-  setTutorDone: function () { write(K.tutor, true); },
+  /**
+   * How far the walkthrough has got: levels below this number have been
+   * taught. A count rather than a flag because the lesson now covers more
+   * than one level, and a player who jumps straight to level 2 should still
+   * be shown it.
+   *
+   * ⚠ The key is older than the count - the first builds wrote `true` here,
+   * meaning level 1 had been taught. Read that as 1.
+   */
+  taughtUpTo: function () {
+    var v = read(K.tutor, 0);
+    return v === true ? 1 : (v | 0);
+  },
+  setTaught: function (index) {
+    if (index + 1 > save.taughtUpTo()) write(K.tutor, index + 1);
+  },
+
+  /* ------- dynamic difficulty ------- */
+
+  dda: function () { return read(K.dda, null); },
+  setDda: function (v) { write(K.dda, v); },
+
+  /**
+   * Which puzzle a displayed level was served. Frozen the first time the
+   * level is opened, so a level keeps its puzzle for ever — otherwise a
+   * record or a star count would belong to whichever puzzle happened to be
+   * dealt that day.
+   */
+  pickOf: function (mode, index) {
+    var v = read(K.pick, {})[slot(mode, index)];
+    return v === undefined ? null : v;
+  },
+  setPick: function (mode, index, src) {
+    var m = read(K.pick, {});
+    m[slot(mode, index)] = src;
+    write(K.pick, m);
+  },
 
   /* ------- the booster bag ------- */
 
@@ -237,14 +361,6 @@ var save = BS.save = {
     save.addBooster(id, -1);
     return true;
   },
-  /** buy a shop pack by index; false if it is not affordable */
-  buyPack: function (i) {
-    var pack = ECON.PACKS[i];
-    if (!pack || !save.spend(pack.price)) return false;
-    save.addBooster(pack.id, pack.qty);
-    return true;
-  },
-
   /* ------- daily reward ------- */
 
   /**
@@ -274,6 +390,9 @@ var save = BS.save = {
     return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) +
            '-' + ('0' + d.getDate()).slice(-2);
   },
+
+  /** every level whose puzzle has been frozen, for tests and debugging */
+  allPicks: function () { return read(K.pick, {}); },
 
   /** wipe everything - used by the settings screen */
   reset: function () {

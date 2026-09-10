@@ -1,0 +1,62 @@
+<!doctype html><meta charset=utf-8>
+<!-- Not a test: a bench for tuning the numbers in src/dda.js. It plays four
+     kinds of player through 30 levels and prints what the difficulty system
+     dealt them. Change a constant, reload, read the colour mix. -->
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<h3 style="color:#8ee0ff;font:600 14px monospace">Bench chỉnh độ khó — không phải test</h3>
+<pre id="o">…</pre>
+<script>
+const L=[];const out=()=>document.getElementById('o').textContent=L.join('\n');
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';document.body.appendChild(fr);
+function boot(){return new Promise(r=>{fr.onload=()=>{const w=fr.contentWindow;
+ try{w.localStorage.clear()}catch(e){} fr.onload=()=>setTimeout(()=>r(fr.contentWindow),300);w.location.reload();};
+ fr.src='../index.html?'+Math.random();});}
+
+/** chơi giả N màn từ `from`, `profile` quyết định người chơi giỏi hay dở */
+function run(w, from, n, profile){
+  const rows=[];
+  for(let k=0;k<n;k++){
+    const lvl=from+k;
+    lvlStart(w,lvl);
+    const src=w.BS.dda.pick('classic',lvl);
+    const cols=w.BS.board.colorsOf('classic',src);
+    const par=w.BS.board.par('classic',src);
+    const st=w.BS.dda.state();
+    rows.push({lvl:lvl+1,src:src+1,cols,par,score:st.score,group:st.group});
+    profile(w,cols,par);
+  }
+  return rows;
+}
+const lvlStart=(w,lvl)=>w.BS.emit('levelReady',{mode:'classic',index:lvl});
+const struggler=(w,cols,par)=>{                 // hoàn tác nhiều, chơi lại, quá chuẩn
+  for(let i=0;i<6;i++) w.BS.emit('boosterUsed','undo');
+  if(Math.random()<0.5) w.BS.emit('replay',{});
+  w.BS.emit('won',{par,moves:Math.round(par*2)});
+};
+const ace=(w,cols,par)=>{ w.BS.emit('won',{par,moves:par}); };   // đi ngọt, không dùng gì
+const mid=(w,cols,par)=>{ w.BS.emit('boosterUsed','undo');w.BS.emit('boosterUsed','undo');
+                          w.BS.emit('won',{par,moves:Math.round(par*1.3)}); };
+
+function show(title,rows){
+  const mix=rows.reduce((m,r)=>(m[r.cols]=(m[r.cols]||0)+1,m),{});
+  const parAvg=(rows.reduce((s,r)=>s+r.par,0)/rows.length).toFixed(1);
+  L.push('── '+title);
+  L.push('   pha trộn màu: '+JSON.stringify(mix)+'   par TB: '+parAvg);
+  L.push('   điểm: '+rows[0].score+' → '+rows[rows.length-1].score+
+         '   nhóm cuối: '+rows[rows.length-1].group);
+  L.push('   10 màn đầu:  '+rows.slice(0,10).map(r=>r.lvl+'→'+r.src+'('+r.cols+')').join(' '));
+  L.push('   drift cuối: màn '+rows[rows.length-1].lvl+' dùng puzzle '+rows[rows.length-1].src);
+  L.push('');
+}
+(async()=>{
+  let w=await boot(); show('Người chơi vật lộn (30 màn)', run(w,150,30,struggler));
+  w=await boot();     show('Người chơi giỏi (30 màn)',    run(w,150,30,ace));
+  w=await boot();     show('Người chơi trung bình (30 màn)', run(w,150,30,mid));
+  // đổi phong độ giữa chừng
+  w=await boot();
+  const a=run(w,150,15,ace), b=run(w,165,15,struggler);
+  show('Giỏi 15 màn rồi đuối 15 màn — nửa sau', b);
+  out();
+})().catch(e=>{L.push('ERR '+e.message+'\n'+e.stack);out();});
+</script>

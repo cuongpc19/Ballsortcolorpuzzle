@@ -1,0 +1,180 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();if(seed)for(const[k,v]of Object.entries(seed))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),320);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+(async function(){
+  let w = await boot();
+  const D = () => w.BS.dda.state();
+  const C = w.BS.DDA_CFG;
+
+  head('Trạng thái ban đầu');
+  ok(D().score === C.SCORE_START, 'điểm bắt đầu = ' + C.SCORE_START, D().score);
+  ok(D().group === 'easy', 'nhóm bắt đầu là easy', D().group);
+
+  head('100 màn đầu KHÔNG bị đụng tới');
+  for (const i of [0, 1, 50, 98, 99]) {
+    ok(w.BS.dda.pick('classic', i) === i, 'màn ' + (i+1) + ' giữ nguyên puzzle');
+  }
+  ok(Object.keys(w.BS.save.allPicks()).length === 0, 'không ghi gì cho các màn đó');
+
+  head('Chế độ Khó không dùng DDA');
+  ok(w.BS.dda.pick('hard', 300) === 300, 'màn khó 301 giữ nguyên');
+
+  head('Điểm thấp → bốc màn 9 màu');
+  w.BS.dda.setScore(10);
+  const picksEasy = [];
+  for (let i = 200; i < 212; i++) picksEasy.push(w.BS.dda.pick('classic', i));
+  const colsEasy = picksEasy.map(j => w.BS.board.colorsOf('classic', j));
+  ok(colsEasy.every(c => c === 9), 'cả 12 màn đều là 9 màu', colsEasy);
+  ok(D().group === 'easy', 'nhóm là easy', D().group);
+  ok(picksEasy.every((j, k) => j >= 200 + k), 'puzzle không bao giờ lùi về trước màn', picksEasy);
+  /* chuỗi dài cùng một nhóm là thứ làm vỡ bản trước: hết cửa sổ tìm kiếm
+     thì nó lặng lẽ trả về màn sai nhóm */
+  const long = [];
+  for (let i = 212; i < 252; i++) long.push(w.BS.dda.pick('classic', i));
+  const badly = long.filter(j => w.BS.board.colorsOf('classic', j) !== 9);
+  ok(badly.length === 0, '40 màn liên tiếp cùng nhóm vẫn đúng 9 màu', badly.length);
+  ok(new Set(long).size === long.length, 'và không màn nào trùng');
+
+  head('Điểm cao → bốc màn 12 màu');
+  w = await boot();
+  w.BS.dda.setScore(90);
+  const picksHard = [];
+  for (let i = 300; i < 312; i++) picksHard.push(w.BS.dda.pick('classic', i));
+  const colsHard = picksHard.map(j => w.BS.board.colorsOf('classic', j));
+  ok(colsHard.every(c => c === 12), 'cả 12 màn đều là 12 màu', colsHard);
+  ok(w.BS.dda.state().group === 'hard', 'nhóm là hard');
+
+  head('Không lặp lại puzzle');
+  const seen = new Set(picksHard);
+  ok(seen.size === picksHard.length, 'không màn nào bị trùng puzzle', picksHard);
+
+  head('Đã chốt thì không đổi nữa');
+  w = await boot();
+  w.BS.dda.setScore(10);
+  const first = w.BS.dda.pick('classic', 500);
+  ok(w.BS.save.pickOf('classic', 500) === first, 'ghi lại lựa chọn', first);
+  w.BS.dda.setScore(95);                      /* đảo ngược hoàn toàn phong độ */
+  ok(w.BS.dda.pick('classic', 500) === first, 'vào lại vẫn đúng puzzle cũ', w.BS.dda.pick('classic', 500));
+
+  head('Vùng đệm — không nhảy nhóm vì một thao tác lẻ');
+  w = await boot();
+  w.BS.dda.setScore(50);                      /* giữa hai ngưỡng */
+  w.BS.dda.pick('classic', 400);
+  const g0 = w.BS.dda.state().group;
+  w.BS.dda.setScore(52);                      /* vẫn trong vùng đệm */
+  w.BS.dda.pick('classic', 410);
+  ok(w.BS.dda.state().group === g0, 'điểm 52 không đổi nhóm', w.BS.dda.state().group);
+  w.BS.dda.setScore(60);                      /* vượt ngưỡng TO_HARD */
+  w.BS.dda.pick('classic', 420);
+  ok(w.BS.dda.state().group === 'hard', 'điểm 60 mới chuyển sang hard');
+
+  head('Chỉ tính lại nhóm mỗi ' + C.REFRESH_EVERY + ' màn');
+  w = await boot();
+  w.BS.dda.setScore(10);
+  w.BS.dda.pick('classic', 600);
+  ok(w.BS.dda.state().group === 'easy', 'nhóm easy');
+  for (let i = 0; i < 9; i++) w.BS.emit('won', { par: 30, moves: 10 });  /* điểm vọt lên */
+  ok(w.BS.dda.state().score >= C.TO_HARD, 'điểm đã qua ngưỡng hard', w.BS.dda.state().score);
+  w.BS.dda.pick('classic', 601);              /* mới cách 1 màn */
+  ok(w.BS.dda.state().group === 'easy', 'cách 1 màn thì chưa tính lại');
+  w.BS.dda.pick('classic', 603);              /* đã cách 3 màn */
+  ok(w.BS.dda.state().group === 'hard', 'cách 3 màn thì tính lại');
+
+  head('Chấm điểm: một lần mỗi màn, theo cái giá phải trả');
+  w = await boot();
+  const sf = (info, t) => w.BS.dda.scoreFor(info, t || {});
+  ok(sf({par:30,moves:30}) === C.CLEAN, 'trong chuẩn, tay không = +' + C.CLEAN, sf({par:30,moves:30}));
+  ok(sf({par:30,moves:34}) === C.TIDY, 'quá 15% = +' + C.TIDY, sf({par:30,moves:34}));
+  ok(sf({par:30,moves:43}) === C.LOOSE, 'quá 50% = ' + C.LOOSE, sf({par:30,moves:43}));
+  ok(sf({par:30,moves:60}) === C.MESSY, 'tệ hơn nữa = ' + C.MESSY, sf({par:30,moves:60}));
+  ok(sf({par:30,moves:30},{undo:3}) === C.CLEAN + 3*C.UNDO, '3 hoàn tác trừ 3', sf({par:30,moves:30},{undo:3}));
+  ok(sf({par:30,moves:30},{tube:1}) === C.CLEAN + C.TUBE, 'thêm ống trừ ' + (-C.TUBE));
+  ok(sf({par:30,moves:30},{replay:1}) === C.CLEAN + C.REPLAY, 'chơi lại trừ ' + (-C.REPLAY));
+  ok(sf({par:30,moves:99},{undo:9,tube:2,replay:3}) === -C.MAX_STEP,
+     'một màn tệ nhất cũng chỉ trừ tối đa ' + C.MAX_STEP, sf({par:30,moves:99},{undo:9,tube:2,replay:3}));
+
+  head('Thắng mới tính điểm, thao tác lẻ thì chưa');
+  w = await boot();
+  const s0 = w.BS.dda.state().score;
+  w.BS.emit('levelReady', { mode: 'classic', index: 300 });
+  w.BS.emit('boosterUsed', 'undo');
+  w.BS.emit('boosterUsed', 'tube');
+  ok(w.BS.dda.state().score === s0, 'dùng booster xong điểm chưa đổi', w.BS.dda.state().score);
+  ok(w.BS.dda.tally().undo === 1 && w.BS.dda.tally().tube === 1, 'nhưng đã ghi sổ', w.BS.dda.tally());
+  const delta = w.BS.dda.scoreFor({ par: 30, moves: 30 }, { undo: 1, tube: 1 });
+  ok(delta === C.CLEAN + C.UNDO + C.TUBE, 'một màn sạch nhưng xài 1 ống + 1 hoàn tác = ' + delta, delta);
+  w.BS.emit('won', { par: 30, moves: 30 });
+  const want = Math.round((s0 + delta) + (C.SCORE_START - (s0 + delta)) * C.DECAY);
+  ok(w.BS.dda.state().score === want, 'điểm đổi đúng công thức (kể cả lực kéo về giữa)',
+     [w.BS.dda.state().score, want]);
+  ok(w.BS.dda.tally().undo === 0, 'sổ được xoá sau khi tính', w.BS.dda.tally());
+
+  head('Sang màn mới thì xoá sổ, chơi lại thì giữ');
+  w = await boot();
+  w.BS.emit('levelReady', { mode: 'classic', index: 300 });
+  w.BS.emit('boosterUsed', 'undo');
+  w.BS.emit('levelReady', { mode: 'classic', index: 300 });   /* chơi lại */
+  ok(w.BS.dda.tally().undo === 1, 'chơi lại vẫn giữ sổ của màn đó', w.BS.dda.tally());
+  w.BS.emit('levelReady', { mode: 'classic', index: 301 });   /* màn khác */
+  ok(w.BS.dda.tally().undo === 0, 'sang màn khác thì xoá', w.BS.dda.tally());
+
+  head('Điểm không bao giờ kẹt ở biên');
+  w = await boot();
+  for (let i = 0; i < 40; i++) { w.BS.emit('levelReady',{mode:'classic',index:400+i}); w.BS.emit('won', { par: 30, moves: 30 }); }
+  const top = w.BS.dda.state().score;
+  ok(top <= C.SCORE_MAX && top >= C.SCORE_MAX - 2, 'chơi giỏi mãi thì tiệm cận trần ' + C.SCORE_MAX, top);
+  let n = 0;
+  while (w.BS.dda.state().score > C.TO_EASY && n < 12) {
+    w.BS.emit('levelReady',{mode:'classic',index:500+n});
+    w.BS.emit('boosterUsed','tube'); w.BS.emit('replay',{});
+    w.BS.emit('won', { par: 30, moves: 70 });
+    n++;
+  }
+  ok(n <= 6, 'từ trần rơi xuống ngưỡng easy trong ' + n + ' màn (≤6)', n);
+
+  head('Người chơi tàng tàng thì đậu ở giữa, không rơi xuống đáy');
+  w = await boot();
+  for (let i = 0; i < 40; i++) {
+    w.BS.emit('levelReady',{mode:'classic',index:600+i});
+    w.BS.emit('boosterUsed','undo'); w.BS.emit('boosterUsed','undo');
+    w.BS.emit('won', { par: 30, moves: 39 });
+  }
+  const mid = w.BS.dda.state().score;
+  ok(mid > C.SCORE_MIN + 5, 'không dính đáy', mid);
+
+  head('Chơi thật: bàn cờ nhận đúng puzzle đã chốt');
+  w = await boot();
+  w.BS.dda.setScore(5);
+  w.BS.save.unlock('classic', 400);
+  w.BS.board.start('classic', 350); await sleep(420);
+  const src = w.BS.board.src();
+  ok(src === w.BS.save.pickOf('classic', 350), 'bàn cờ dùng đúng puzzle được chốt', [src, w.BS.save.pickOf('classic',350)]);
+  ok(w.BS.board.colorsOf('classic', src) === 9, 'và đó là màn 9 màu', w.BS.board.colorsOf('classic', src));
+  ok($(w, '#levelNum').textContent === '351', 'số màn hiển thị vẫn là 351', $(w,'#levelNum').textContent);
+  const balls = $$(w, '#balls .ball').length;
+  ok(balls === 36, '9 màu × 4 bi = 36 bi trên bàn', balls);
+
+  head('Người chơi không thấy dấu vết gì');
+  ok(!/\d+\s*→|DDA|dda/i.test($(w, '#topbar').textContent), 'thanh trên không lộ gì', $(w,'#topbar').textContent.trim());
+  ok($$(w, '#screenGame [class*=dda]').length === 0, 'không có phần tử giao diện nào của DDA');
+
+  out();
+})().catch(e=>{L.push('EXCEPTION: '+e.message+'\n'+e.stack);fail++;out();});
+</script>

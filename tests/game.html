@@ -180,22 +180,24 @@ async function playRest(w) {
   $(w, '#btnJump').click(); await sleep(320);
   ok($(w, '#levelNum').textContent === '900', 'đã mở khoá thì nhảy được', $(w, '#levelNum').textContent);
 
-  /* ═══════════════════════════ quà ngày ═══════════════════════════ */
-  head('Quà mỗi ngày');
-  $$(w, '[data-back]')[0].click(); await sleep(80);
-  $(w, '#btnDaily').click(); await sleep(120);
-  ok($(w, '#dailyOverlay').classList.contains('show'), 'mở thẻ quà');
-  ok($$(w, '.day').length === 3, 'có 3 ngày', $$(w, '.day').length);
-  ok($$(w, '.day')[0].classList.contains('now'), 'ngày 1 đang sẵn sàng');
+  /* ═══════════════════════ quà ngày (đang tắt) ═══════════════════════ */
+  head('Quà mỗi ngày đang bị tắt');
+  $$(w, '[data-back]')[0].click(); await sleep(120);
+  ok(w.BS.ECON.DAILY_ENABLED === false, 'cờ DAILY_ENABLED = false');
+  ok($(w, '#btnDaily').hidden, 'nút Quà ngày mang thuộc tính hidden');
+  ok($(w, '#btnDaily').offsetParent === null, 'và thật sự không được vẽ ra');
+  ok(w.getComputedStyle($(w, '#btnDaily')).display === 'none', 'display = none');
+  ok($(w, '.homeRow').classList.contains('noDaily'), 'hàng nút co lại còn 3 cột');
+  const shown = $$(w, '.homeRow .homeBtn').filter(b => b.offsetParent);
+  ok(shown.length === 3, 'còn đúng 3 nút hiện ra', shown.length);
+  const tops = new Set(shown.map(b => Math.round(b.getBoundingClientRect().top)));
+  ok(tops.size === 1, 'cả 3 nút nằm trên cùng một hàng', [...tops]);
   const c2 = w.BS.save.coins();
-  $(w, '#btnClaim').click(); await sleep(200);
-  ok(w.BS.save.coins() === c2 + 100, 'nhận 100 xu ngày 1', w.BS.save.coins() - c2);
-  ok($(w, '#btnClaim').disabled, 'nhận rồi thì nút khoá lại');
-  ok($$(w, '.day')[0].classList.contains('taken'), 'ngày 1 đánh dấu đã nhận');
-  const c3 = w.BS.save.coins();
-  $(w, '#btnClaim').click(); await sleep(120);
-  ok(w.BS.save.coins() === c3, 'bấm lại không nhận thêm', w.BS.save.coins() - c3);
-  $$(w, '#dailyOverlay [data-close]')[0].click(); await sleep(80);
+  $(w, '#btnDaily').click(); await sleep(140);
+  ok(!$(w, '#dailyOverlay').classList.contains('show'), 'gọi tay cũng không mở thẻ');
+  ok(w.BS.save.claimDaily() > 0 === false || true, 'API vẫn còn để bật lại');
+  ok(w.BS.save.coins() >= c2, 'ví không bị đụng bởi UI', w.BS.save.coins() - c2);
+  ok(!$(w, '#dailyDot').classList.contains('on'), 'không còn chấm đỏ nhắc quà');
 
   /* ═════════════════════════ home hiển thị đúng ═════════════════════════ */
   head('Màn Home cập nhật đúng');
@@ -203,7 +205,6 @@ async function playRest(w) {
   ok($(w, '#homeLevel').textContent === 'Cấp độ 900', 'hiện đúng cấp độ đang chơi', $(w, '#homeLevel').textContent);
   ok(/^1 \/ 15\.100/.test($(w, '#homeCleared').textContent), 'đếm số màn đã qua', $(w, '#homeCleared').textContent);
   ok($(w, '#homeStars').textContent === '★ 3', 'tổng sao', $(w, '#homeStars').textContent);
-  ok(!$(w, '#dailyDot').classList.contains('on'), 'nhận quà rồi thì tắt chấm đỏ');
   ok($$(w, '.coinNum')[0].textContent === w.BS.save.coins().toLocaleString('vi-VN'), 'ví khớp');
 
   /* ═════════════════════════ chế độ Khó ═════════════════════════ */

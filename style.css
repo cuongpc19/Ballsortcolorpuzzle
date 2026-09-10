@@ -1,4 +1,10 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--appW:480px}   /* the phone column the whole game lives in */
+/* On a real phone the column is the screen. On a desktop window the board is
+   what people look at, and at 480px it is bound by width while a tall window
+   still has empty room above and below it - so let the column widen with the
+   viewport height until the board is the one running out of room. */
+@media (min-width:600px){ :root{--appW:min(94vw,max(480px,64vh))} }
 html,body{height:100%;margin:0}
 body{
   background:#141419;
@@ -11,20 +17,52 @@ body{
 /* ---------- animated backdrop ---------- */
 #bg{
   position:fixed;inset:0;z-index:-1;overflow:hidden;
+  /* the gradient stays as the colour under the artwork - it is what shows
+     while bg.jpg loads, and what fills the frame if it ever fails */
   background:
     radial-gradient(120% 80% at 50% -10%, #24243a 0%, #191922 45%, #131317 100%),
     #131317;
 }
-#bg::after{ /* the faint graph paper the board has always sat on */
+/* The artwork is a 9:19.5 portrait painting: its light blooms and stray balls
+   all live in the corners, and the middle is deliberately empty so text stays
+   readable. Stretched over a wide desktop window with `cover` it blows up so
+   far that only that empty middle is left on screen - which looks like no
+   backdrop at all. So the painting is pinned to the phone column, and a
+   blurred copy of it washes whatever room is left either side. */
+#bg::before{ /* the wash outside the column */
   content:"";position:absolute;inset:0;
-  background-image:
-    linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
-  background-size:44px 44px;
-  mask:radial-gradient(120% 90% at 50% 40%,#000 40%,transparent 100%);
-  -webkit-mask:radial-gradient(120% 90% at 50% 40%,#000 40%,transparent 100%);
+  background:url(assets/bg.jpg) center/cover no-repeat;
+  filter:blur(46px) brightness(.6) saturate(1.1);
+  transform:scale(1.2);   /* hides the edges the blur would smear inward */
 }
-#bg i{ /* slow drifting colour blobs */
+#bg::after{ /* the painting itself, breathing slowly so it isn't dead */
+  content:"";position:absolute;top:0;bottom:0;left:0;right:0;
+  /* the box tracks the game column, so the artwork is always as wide as the
+     game itself. On a wide-but-short desktop window that costs some of the
+     painting's top and bottom - the game reading big is worth more than the
+     corner balls */
+  width:min(100%,var(--appW));margin:0 auto;
+  background:
+    /* a soft scrim so white text keeps its contrast over the middle */
+    radial-gradient(105% 62% at 50% 46%,rgba(8,8,14,.46) 0%,rgba(8,8,14,.18) 55%,transparent 78%),
+    url(assets/bg.jpg) center/cover no-repeat;
+  animation:bgFloat 44s ease-in-out infinite alternate;
+}
+@keyframes bgFloat{
+  from{transform:scale(1)}
+  to  {transform:scale(1.03)}
+}
+/* On a desktop window the painting is asked to fill the frame edge to edge
+   rather than stand in a lit column with dark either side. `cover` on a
+   portrait image that wide means what shows is its calm middle, so the
+   blurred wash underneath still carries the colour out to the corners. */
+@media (min-width:600px){
+  #bg::after{width:100%;margin:0}
+}
+/* the artwork already carries the colour blooms and the hex pattern, so the
+   old CSS blobs would only muddy it - the markup stays for a quick revert */
+#bg i{display:none}
+#bg.plain i{ /* slow drifting colour blobs */
   position:absolute;display:block;border-radius:50%;
   filter:blur(60px);opacity:.30;
   animation:drift 26s ease-in-out infinite alternate;
@@ -39,7 +77,14 @@ body{
   to  {transform:translate3d(6vmin,5vmin,0) scale(1.16)}
 }
 
-#app{position:fixed;inset:0}
+/* The game is a portrait phone screen. On a wide monitor it stays a centred
+   column instead of stretching, which would fling the HUD into the far
+   corners and leave the board marooned in the middle. Over-constrained
+   left/right + width means `margin:auto` does the centring. */
+#app{
+  position:fixed;top:0;bottom:0;left:0;right:0;
+  width:min(100%,var(--appW));margin:0 auto;
+}
 
 /* ---------- screens ---------- */
 .screen{
@@ -50,39 +95,72 @@ body{
 
 /* ---------- top bar ---------- */
 .bar{
-  flex:0 0 auto;display:flex;align-items:center;gap:9px;
-  padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:calc(env(safe-area-inset-top) + 12px) 14px 12px;
 }
 .barTitle{font-size:16px;font-weight:800;letter-spacing:.02em}
 .ic{
-  width:38px;height:38px;flex:0 0 auto;border:0;border-radius:12px;
-  background:rgba(255,255,255,.07);color:#e9e9ec;font-size:16px;cursor:pointer;
+  width:46px;height:46px;flex:0 0 auto;border:0;border-radius:14px;
+  background:rgba(255,255,255,.07);color:#e9e9ec;font-size:21px;cursor:pointer;
   transition:background .12s,transform .1s;
 }
 .ic:active{background:rgba(255,255,255,.16);transform:scale(.9)}
 .ic.off{opacity:.42}
 #levelPill{
-  display:flex;align-items:baseline;gap:6px;padding:6px 13px;border-radius:12px;
+  display:flex;align-items:baseline;gap:7px;padding:8px 16px;border-radius:12px;
   background:rgba(255,255,255,.07);
 }
-#levelPill .lbl,#moveBox .lbl{font-size:11px;color:#8d8d96;letter-spacing:.04em}
-#levelNum{font-size:19px;font-weight:700;letter-spacing:.02em}
-#moveBox{padding:6px 12px;border-radius:12px;background:rgba(255,255,255,.07);font-weight:600}
+/* Chơi lại sits dead centre of the bar. Two flex spacers would only centre it
+   between the two groups, and those groups are different widths - so it is
+   pinned to the middle and taken out of the flow. */
+#topbar{position:relative}
+.ic.mid{
+  position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 6px);
+  transform:translateX(-50%);
+  /* the artwork is the button, at the same weight as the boosters - a pill
+     behind it only made it read smaller than they do */
+  width:auto;height:auto;padding:0;background:none;border-radius:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.ic.mid:active{transform:translateX(-50%) scale(.9);background:none}
+.ic.mid img{display:block;width:52px;height:52px;pointer-events:none;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
+
+#levelPill .lbl,#moveBox .lbl{font-size:13px;color:#a2a2ad;letter-spacing:.04em}
+#levelNum{font-size:25px;font-weight:800;letter-spacing:.02em}
+#moveBox{padding:8px 15px;font-weight:800;font-size:18px}
+/* the moulded pill the reference HUD is built out of: lit along the top,
+   sitting on a solid dark edge rather than floating flat */
+#levelPill,#moveBox{
+  border-radius:13px;
+  background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.05));
+  box-shadow:0 2px 0 rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.13);
+}
 .spacer{flex:1}
 #modePill{display:flex;padding:3px;border-radius:12px;background:rgba(255,255,255,.07)}
 .mode{
-  border:0;background:transparent;color:#8d8d96;font:600 12px/1 inherit;
+  border:0;background:transparent;color:#8d8d96;font-weight:600;font-size:12px;line-height:1;
   padding:8px 11px;border-radius:9px;cursor:pointer;transition:.15s;
 }
 .mode.active{background:rgba(255,255,255,.13);color:#fff}
 
-@media (max-width:404px){
+@media (max-width:460px){
   .bar{gap:7px;padding-left:10px;padding-right:10px}
-  .ic{width:34px;height:34px;border-radius:11px}
+  .ic{width:40px;height:40px;border-radius:12px;font-size:19px}
+  .ic.mid img{width:46px;height:46px}
+  #levelNum{font-size:22px}
+  .wallet{font-size:15px;padding:7px 12px 7px 9px}
   #moveBox .lbl{display:none}
   #moveBox{padding:6px 10px}
   .mode{padding:8px 9px}
   #levelPill{padding:6px 10px}
+
+  /* On a phone the Play button spanning the full column reads as a banner
+     rather than a button - let it be only as wide as its label needs. The id
+     is on purpose: `.playBtn{width:100%}` is defined further down the file and
+     would otherwise win on source order. */
+  #screenHome .homeMid{align-items:center}
+  #screenHome .playBtn{width:auto;padding:17px 54px;font-size:22px;border-radius:18px}
 }
 
 /* ---------- board ---------- */
@@ -94,24 +172,33 @@ body{
 .tube{
   position:absolute;
   --bw:4px;
+  /* Lit from behind, the way the store artwork is: the wall throws a soft
+     bloom outward instead of the tube being a dark box with a white outline.
+     Nothing dark is painted inside it any more - what fills the glass is the
+     backdrop showing through. */
   --depth:
-    inset 0 0 0 1px rgba(120,140,170,.34),                /* glass inner edge */
-    inset 0 0 calc(var(--bw) * 2.2) rgba(0,0,0,.42),
-    inset 0 calc(var(--bw) * .7) calc(var(--bw) * 1.4) rgba(0,0,0,.30),
-    2px 3px 0 rgba(0,0,0,.22),                            /* moulded lip      */
-    0 14px 26px rgba(0,0,0,.6),
-    0 4px 10px rgba(0,0,0,.42);
+    inset 0 0 0 1px rgba(160,190,230,.30),                /* glass inner edge */
+    inset 0 0 calc(var(--bw) * 2.4) rgba(140,180,235,.14),
+    inset 0 calc(var(--bw) * -1.1) calc(var(--bw) * 2) rgba(255,255,255,.16),
+    0 0 calc(var(--bw) * 5) rgba(190,215,255,.22),        /* the backlight    */
+    2px 3px 0 rgba(0,0,0,.18),                            /* moulded lip      */
+    0 14px 26px rgba(0,0,0,.5),
+    0 4px 10px rgba(0,0,0,.34);
   border:var(--bw) solid #eef1f6;          /* fallback wall            */
   border-radius:12px 12px 999px 999px;
-  /* frosted glass with a bright streak down the left, like the artwork */
+  /* clear glass: a bright streak down the left, a dimmer one down the right,
+     and nothing opaque between them */
   background:linear-gradient(104deg,
-      rgba(255,255,255,.20)  0 5%,
-      rgba(255,255,255,.085) 11%,
-      rgba(255,255,255,.05)  20%,
-      rgba(255,255,255,.035) 46%,
-      rgba(0,0,0,.10)        72%,
-      rgba(255,255,255,.10)  88%,
-      rgba(255,255,255,.04)  100%) padding-box;
+      rgba(255,255,255,.17)  0 5%,
+      rgba(255,255,255,.07)  11%,
+      rgba(255,255,255,.03)  20%,
+      rgba(255,255,255,.012) 46%,
+      rgba(255,255,255,.02)  72%,
+      rgba(255,255,255,.09)  88%,
+      rgba(255,255,255,.03)  100%) padding-box;
+  /* what sells glass more than any highlight: the backdrop bends through it */
+  -webkit-backdrop-filter:blur(3px) brightness(1.06);
+  backdrop-filter:blur(3px) brightness(1.06);
   box-shadow:var(--depth);
   cursor:pointer;
   transform-origin:50% 100%;
@@ -224,8 +311,9 @@ body{
   box-shadow:
     inset 0 calc(var(--d) * -.20) calc(var(--d) * .28) rgba(0,0,0,.30),
     inset 0 calc(var(--d) *  .12) calc(var(--d) * .18) rgba(255,255,255,.22),
-    inset 0 calc(var(--d) * -.07) calc(var(--d) * .10) rgba(255,255,255,.26),
-    inset 0 calc(var(--d) * -.02) 0 calc(var(--d) * .015) rgba(255,255,255,.22),
+    /* the light coming from behind wraps around the lower edge */
+    inset 0 calc(var(--d) * -.07) calc(var(--d) * .12) rgba(255,255,255,.40),
+    inset 0 calc(var(--d) * -.02) 0 calc(var(--d) * .02) rgba(255,255,255,.34),
     0 calc(var(--d) * .11) calc(var(--d) * .21) rgba(0,0,0,.5);
   transition:transform .2s cubic-bezier(.25,1.5,.5,1), width .12s, height .12s,
              box-shadow .18s, filter .18s;
@@ -240,6 +328,122 @@ body{
 }
 .ball.sel{filter:brightness(1.12) saturate(1.12) drop-shadow(0 6px 12px rgba(0,0,0,.55))}
 
+/* ---------- a ball dealt face down ---------- */
+/* Sits over the real colour rather than replacing it, so revealing is a
+   dissolve and the colour is already underneath when it clears. */
+.ball .qmark{
+  position:absolute;inset:0;z-index:1;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-style:normal;font-weight:800;letter-spacing:0;
+  font-size:calc(var(--d) * .5);line-height:1;
+  color:rgba(255,255,255,.9);
+  text-shadow:0 calc(var(--d) * .03) calc(var(--d) * .05) rgba(0,0,0,.55);
+  background:
+    radial-gradient(circle at 21% 31%, #fff 0 3.2%, rgba(255,255,255,0) 5%),
+    radial-gradient(circle at 34% 26%, #737aa6 0%, #414670 46%, #414670 62%, #1c1d33 100%);
+  transition:opacity .32s ease, transform .32s ease;
+}
+.ball .qmark::before{content:"?"}
+.ball .qmark.off{opacity:0;transform:scale(1.2)}
+
+/* ---------- a ball carrying a lucky coin ---------- */
+/* Sits on the shoulder of the ball rather than covering it, so the colour is
+   still readable - the coin is a bonus, not a disguise. */
+.ball .ballCoin{
+  position:absolute;z-index:2;
+  right:-6%;top:-8%;width:52%;height:52%;border-radius:50%;
+  background:
+    radial-gradient(circle at 30% 26%, #fff8d0 0 12%, rgba(255,255,255,0) 30%),
+    radial-gradient(circle at 38% 30%, #ffe071 0%, #f5b21a 52%, #b06f04 100%);
+  box-shadow:
+    inset 0 calc(var(--d) * -.02) calc(var(--d) * .03) rgba(0,0,0,.35),
+    0 calc(var(--d) * .02) calc(var(--d) * .05) rgba(0,0,0,.45),
+    0 0 calc(var(--d) * .18) rgba(255,196,60,.75);
+  animation:coinSpin 1.9s ease-in-out infinite;
+  transition:opacity .35s ease, transform .35s ease;
+}
+.ball .ballCoin::before{
+  content:"";position:absolute;inset:22%;border-radius:50%;
+  border:calc(var(--d) * .022) solid rgba(255,255,255,.5);
+}
+.ball .ballCoin.off{opacity:0;transform:scale(2.1) translate(6%,-30%)}
+@keyframes coinSpin{
+  0%,100%{transform:scaleX(1)}
+  50%{transform:scaleX(.24)}
+}
+@media (prefers-reduced-motion:reduce){ .ball .ballCoin{animation:none} }
+
+/* ---------- a level that is hard for this player ---------- */
+/* while a badge is up, it takes the label's place */
+#levelPill.tagged .lbl{display:none}
+.levelTag{
+  align-self:center;
+  font-size:9px;font-weight:800;letter-spacing:.09em;
+  padding:3px 7px;border-radius:6px;line-height:1;
+  color:#20160a;background:linear-gradient(180deg,#ffd45a,#f0a01e);
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 2px 6px rgba(240,160,30,.4);
+}
+.levelTag.sh{
+  color:#fff;background:linear-gradient(180deg,#ff6a8a,#d4141c);
+  box-shadow:0 1px 0 rgba(255,255,255,.35) inset, 0 2px 8px rgba(212,20,28,.5);
+}
+.levelTag[hidden]{display:none}
+
+/* The glass gets a little more polish on a hard level. It is the only reward
+   the badge carries, so it has to be worth noticing - but the balls still
+   have to be the easiest thing to read, so this stays a change of finish
+   rather than anything that moves.
+
+   `::before` is the moulded wall and `::after` belongs to the cheer flash, so
+   this works by re-lighting the wall it already has: a warmer, higher-contrast
+   gradient reads as better-polished glass. */
+#tubes.hard .tube{
+  filter:drop-shadow(0 0 calc(var(--bw) * 2.2) rgba(255,205,110,.42));
+}
+#tubes.hard .tube::before{
+  background:linear-gradient(112deg,
+      #ffffff 0 26%, #fffdf3 38%, #ffe6ad 50%,
+      #ffffff 64%, #fff7de 82%, #ffd98a 100%);
+}
+#tubes.superhard .tube{
+  filter:drop-shadow(0 0 calc(var(--bw) * 2.6) rgba(255,140,165,.48));
+}
+#tubes.superhard .tube::before{
+  background:linear-gradient(112deg,
+      #ffffff 0 26%, #fff6f8 38%, #ffc9d6 50%,
+      #ffffff 64%, #fff0f3 82%, #ff9db4 100%);
+}
+/* a finished tube dims down, and it should keep dimming down */
+#tubes.hard .tube.done, #tubes.superhard .tube.done{filter:brightness(.6) saturate(.88)}
+
+/* ---------- the stuck panel ---------- */
+.stuckPanel .stuckArt{
+  display:block;width:min(46vw,168px);height:auto;margin:-6px auto 10px;
+  filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));
+}
+.ways{
+  list-style:none;margin:14px 0 20px;padding:0;text-align:left;
+  display:flex;flex-direction:column;gap:9px;
+}
+.ways li{
+  position:relative;padding:9px 12px 9px 30px;border-radius:12px;
+  background:rgba(255,255,255,.05);
+  font-size:13px;line-height:1.45;color:#c9cdd7;
+}
+.ways li::before{
+  content:"";position:absolute;left:13px;top:16px;
+  width:6px;height:6px;border-radius:50%;background:#ffc85a;
+}
+.ways b{color:#fff;font-weight:700}
+
+/* a button asking to be looked at - the original's `BreathHintHandle` */
+.breath{animation:breath 1.1s ease-in-out 3}
+@keyframes breath{
+  0%,100%{transform:scale(1);filter:none}
+  50%{transform:scale(1.11);filter:brightness(1.3) drop-shadow(0 0 10px rgba(255,200,90,.85))}
+}
+@media (prefers-reduced-motion:reduce){ .breath{animation:none} }
+
 /* ---------- fx particles ---------- */
 #fx b,#fx u,#fx s,#fx em{position:absolute;display:block;pointer-events:none}
 #fx b{border-radius:50%}                                   /* dot        */
@@ -252,28 +456,48 @@ body{
 
 /* ---------- toolbar ---------- */
 #toolbar{
-  flex:0 0 auto;display:flex;gap:10px;justify-content:center;
+  flex:0 0 auto;display:flex;gap:18px;justify-content:center;
   padding:10px 14px calc(env(safe-area-inset-bottom) + 14px);
 }
 .tool{
-  position:relative;flex:1 1 0;max-width:120px;
-  display:flex;flex-direction:column;align-items:center;gap:3px;
-  padding:9px 4px;border:0;border-radius:14px;
+  position:relative;flex:0 0 auto;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:10px;border:0;border-radius:18px;
   background:rgba(255,255,255,.07);color:#e9e9ec;cursor:pointer;
   transition:background .12s,opacity .12s,transform .1s;
 }
 .tool:active{background:rgba(255,255,255,.16);transform:scale(.92)}
 .tool:disabled{opacity:.32;cursor:default;transform:none}
 .tool .gl{font-size:19px;line-height:1}
-.tool .tx{font-size:11px;color:#a9a9b2}
+/* `display:flex` on .tool outranks the UA's `[hidden]{display:none}` */
+.tool[hidden]{display:none}
+.tool img.gl{display:block;width:58px;height:58px;pointer-events:none}
+/* Skip is a way out, not a move - it sits a size below the two boosters so it
+   never looks like the thing to reach for first. */
+#btnSkip{padding:14px}
+#btnSkip img.gl{width:46px;height:46px}
+
 .price{
-  position:absolute;top:3px;right:6px;min-width:18px;height:17px;padding:0 5px;
-  border-radius:9px;background:#4a4a55;color:#fff;
-  font:700 10px/17px inherit;text-align:center;white-space:nowrap;
+  position:absolute;top:0;right:0;min-width:24px;height:22px;padding:0 7px;
+  border-radius:11px;color:#fff;
+  /* one badge for both boosters: a count is a count, whether it came from the
+     free allowance or out of the bag */
+  background:linear-gradient(180deg,#5fd36f,#2f9d4d);
+  font-weight:800;font-size:13px;line-height:22px;text-align:center;white-space:nowrap;
+  box-shadow:0 2px 5px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.28);
 }
-.tool.free .price{background:#2f9d4d}
-.tool.buy  .price{background:#c9821b;color:#231400}
-.tool.buy .gl{opacity:.75}
+.tool.buy .gl{opacity:.8}
+/* the price of a use, under the icon */
+.cost{
+  display:none;align-items:center;justify-content:center;gap:5px;
+  margin-top:6px;padding:3px 11px;border-radius:999px;
+  background:linear-gradient(180deg,#ffd873,#f0a41a);
+  color:#3a2000;font-weight:800;font-size:14px;line-height:19px;
+  box-shadow:0 2px 0 rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.5);
+}
+.cost .coin{width:15px;height:15px}
+.tool.buy .cost{display:flex}
+.tool.buy .price{display:none}
 
 /* ---------- toast ---------- */
 #toast{
@@ -312,46 +536,47 @@ body{
 @keyframes fade{from{opacity:0}}
 .overlay.show{display:flex}
 .panel{
-  width:100%;max-width:340px;padding:26px 22px 20px;border-radius:22px;
+  width:100%;max-width:400px;padding:32px 26px 24px;border-radius:26px;
   background:#242427;border:1px solid rgba(255,255,255,.09);text-align:center;
   box-shadow:0 24px 60px rgba(0,0,0,.5);
   animation:rise .34s cubic-bezier(.2,1.5,.4,1);
 }
 @keyframes rise{from{opacity:0;transform:translateY(26px) scale(.9)}}
-.panel h2{margin:0 0 6px;font-size:22px}
-.panel p{margin:0 0 18px;color:#9a9aa3;font-size:13px}
-.panel .sub{margin-bottom:12px}
+.panel h2{margin:0 0 8px;font-size:28px}
+.panel p{margin:0 0 22px;color:#9a9aa3;font-size:16px;line-height:1.45}
+.panel .sub{margin-bottom:16px}
+.panel .sub .coin{width:19px;height:19px}
 .burst{font-size:46px;margin-bottom:6px;display:inline-block;animation:burst .7s cubic-bezier(.2,1.7,.4,1)}
 @keyframes burst{0%{transform:scale(0) rotate(-40deg)}55%{transform:scale(1.35) rotate(12deg)}75%{transform:scale(.92) rotate(-6deg)}100%{transform:scale(1)}}
 .row{display:flex;gap:10px}
 .btn{
-  flex:1;padding:13px 10px;border:0;border-radius:14px;
-  font:700 14px/1 inherit;cursor:pointer;transition:transform .1s,filter .12s;
+  flex:1;padding:16px 12px;border:0;border-radius:16px;
+  font-weight:800;font-size:17px;line-height:1;cursor:pointer;transition:transform .1s,filter .12s;
 }
 .btn:active{transform:scale(.94)}
 .btn.primary{background:#3aa7ec;color:#06212f}
 .btn.ghost{background:rgba(255,255,255,.09);color:#e9e9ec}
-.btn.wide{width:100%;margin-top:6px}
+.btn.wide{width:100%;margin-top:9px}
 .jump{display:flex;gap:8px;margin-bottom:14px}
 .jump input{
   flex:1;min-width:0;padding:12px 14px;border-radius:14px;
   border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.28);
-  color:#fff;font:600 15px/1 inherit;
+  color:#fff;font-weight:600;font-size:15px;line-height:1;
 }
 .jump input:focus{outline:none;border-color:#3aa7ec}
 .jump .btn{flex:0 0 74px}
 #quickList{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 #quickList button{
   padding:10px 2px;border:0;border-radius:12px;background:rgba(255,255,255,.07);
-  color:#e9e9ec;font:600 12px/1 inherit;cursor:pointer;transition:transform .1s;
+  color:#e9e9ec;font-weight:600;font-size:12px;line-height:1;cursor:pointer;transition:transform .1s;
 }
 #quickList button:active{transform:scale(.92)}
 #quickList button.cur{background:#3aa7ec;color:#06212f}
 
 /* ---------- level complete popup ---------- */
 .winPanel{
-  position:relative;width:100%;max-width:352px;
-  border-radius:26px;
+  position:relative;width:100%;max-width:420px;
+  border-radius:30px;
   background:linear-gradient(168deg,#2c2c33 0%,#212127 58%,#1c1c21 100%);
   border:1px solid rgba(255,255,255,.10);
   box-shadow:0 26px 70px rgba(0,0,0,.62),0 0 0 1px rgba(0,0,0,.4),
@@ -364,27 +589,35 @@ body{
   60%{opacity:1;transform:translateY(-6px) scale(1.03)}
   100%{transform:translateY(0) scale(1)}
 }
+/* Not a spinning starburst - every third mobile game ships that one. This is
+   the same lighting the backdrop art uses: a warm glow spilling from above the
+   title, a cool pool of light at the base, and the faint dotted texture that
+   runs through the background, breathing rather than rotating. */
 .rays{
-  position:absolute;left:50%;top:-46%;width:150%;aspect-ratio:1;
-  translate:-50% 0;
-  background:repeating-conic-gradient(from 0deg,
-      rgba(255,205,90,.20) 0deg 7deg,
-      rgba(255,205,90,0)   7deg 24deg);
-  -webkit-mask:radial-gradient(closest-side,#000 12%,rgba(0,0,0,.5) 46%,transparent 74%);
-  mask:radial-gradient(closest-side,#000 12%,rgba(0,0,0,.5) 46%,transparent 74%);
-  animation:spin 26s linear infinite;
-  pointer-events:none;
+  position:absolute;inset:0;pointer-events:none;
+  background:
+    /* a sheen falling across the panel, the way light catches glass */
+    linear-gradient(114deg, transparent 34%, rgba(255,255,255,.055) 49%, transparent 64%),
+    radial-gradient(120% 62% at 50% -14%, rgba(255,201,86,.30) 0%,
+                    rgba(255,170,60,.13) 40%, transparent 70%),
+    radial-gradient(66% 32% at 50% 108%, rgba(120,152,255,.24) 0%, transparent 74%),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.075) 1.1px, transparent 1.3px);
+  background-size:auto, auto, auto, 20px 20px;
+  animation:winBreathe 5.5s ease-in-out infinite alternate;
 }
-@keyframes spin{to{rotate:360deg}}
+@keyframes winBreathe{
+  from{opacity:.8;transform:scale(1)}
+  to  {opacity:1;transform:scale(1.03)}
+}
 
-.winInner{position:relative;padding:24px 22px 20px}
+.winInner{position:relative;padding:32px 28px 26px}
 .winLevel{
-  display:inline-block;padding:5px 14px;border-radius:999px;
+  display:inline-block;padding:7px 18px;border-radius:999px;
   background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.08);
-  font-size:12px;font-weight:700;color:#c9cad2;letter-spacing:.05em;
+  font-size:15px;font-weight:700;color:#c9cad2;letter-spacing:.05em;
 }
 .winTitle{
-  margin:10px 0 2px;font-size:27px;font-weight:900;letter-spacing:.03em;
+  margin:14px 0 2px;font-size:36px;font-weight:900;letter-spacing:.03em;
   background:linear-gradient(180deg,#fff 0%,#ffe27a 58%,#ffab2e 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 2px 0 rgba(0,0,0,.4));
@@ -415,18 +648,18 @@ body{
 }
 
 .praise{
-  min-height:20px;margin:6px 0 14px;font-size:15px;font-weight:800;color:#ffd979;
+  min-height:24px;margin:8px 0 18px;font-size:19px;font-weight:800;color:#ffd979;
   opacity:0;transform:translateY(6px);
 }
 .praise.on{animation:praiseIn .4s ease-out forwards}
 @keyframes praiseIn{to{opacity:1;transform:translateY(0)}}
 
-.winRow{display:flex;gap:10px;margin-top:4px}
-.btn.sq{flex:0 0 54px;font-size:20px}
+.winRow{display:flex;gap:12px;margin-top:6px}
+.btn.sq{flex:0 0 64px;font-size:25px}
 .btn.grow{
   position:relative;overflow:hidden;
   background:linear-gradient(180deg,#5cc0f5 0%,#2f9ce0 55%,#1b7cba 100%);
-  color:#04222f;font-size:15px;
+  color:#04222f;font-size:19px;
   box-shadow:0 4px 0 #14608f,0 10px 20px rgba(0,0,0,.45);
 }
 .btn.grow:active{transform:translateY(3px);box-shadow:0 1px 0 #14608f,0 6px 12px rgba(0,0,0,.45)}
@@ -464,41 +697,107 @@ body{
 /* ═══════════════════════════ wallet ═══════════════════════════ */
 .wallet{
   display:flex;align-items:center;gap:5px;flex:0 0 auto;
-  padding:6px 11px 6px 8px;border-radius:999px;
+  padding:8px 15px 8px 11px;border-radius:999px;
   background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05));
   border:1px solid rgba(255,255,255,.10);
-  font-weight:800;font-size:13px;
+  font-weight:800;font-size:17px;
   box-shadow:0 3px 8px rgba(0,0,0,.35);
 }
-.wallet b{font-size:14px;line-height:1}
-#screenHome .wallet{position:absolute;top:calc(env(safe-area-inset-top) + 14px);right:16px;z-index:3}
+.wallet b{font-size:18px;line-height:1}
+/* The coin, same three rings MarbleSort bakes its own from: a dark gold rim,
+   the gold body, and a lighter core sitting a touch high. Drawn rather than
+   set as an emoji so it reads the same on every platform. */
+.coin{
+  display:inline-block;flex:0 0 auto;width:1.15em;height:1.15em;
+  vertical-align:-.16em;border-radius:50%;
+  background:radial-gradient(circle at 50% 46%,
+    #ffe07a 0 27%, #ffc21e 27% 43%, #c67a06 43% 50%, transparent 50%);
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
+}
+.wallet .coin{width:22px;height:22px}
 
 #coinFly{position:fixed;inset:0;pointer-events:none;z-index:40}
 #coinFly i{position:absolute;font-style:normal;font-size:20px;will-change:transform}
+#coinFly i.coin{width:20px;height:20px}
 
 /* ═══════════════════════════ home ═══════════════════════════ */
 #screenHome{align-items:center;justify-content:center;gap:30px;padding:0 18px 26px}
 
 .homeTop{text-align:center}
-.logoTubes{display:flex;gap:10px;justify-content:center;margin-bottom:16px}
-.logoTubes i{
-  display:block;width:34px;height:104px;border-radius:8px 8px 999px 999px;
-  border:3px solid #eef1f6;
-  background:
-    linear-gradient(180deg,
-      transparent 0 8%, var(--c1) 8% 31%, transparent 31% 32%,
-      var(--c2) 32% 55%, transparent 55% 56%,
-      var(--c3) 56% 79%, transparent 79% 80%,
-      var(--c4) 80% 100%);
-  box-shadow:0 8px 18px rgba(0,0,0,.5);
+.logoTubes{
+  position:relative;display:flex;justify-content:center;margin-bottom:18px;
+  --bs:46px;                       /* ball size; everything else derives from it */
+  gap:calc(var(--bs) * .33);
+}
+.lt{   /* one glass tube, moulded the way the board moulds its own */
+  position:relative;
+  display:flex;flex-direction:column;gap:calc(var(--bs) * .07);
+  padding:calc(var(--bs) * .15) calc(var(--bs) * .11) calc(var(--bs) * .16);
+  border:calc(var(--bs) * .09) solid #eef1f6;
+  border-radius:calc(var(--bs) * .26) calc(var(--bs) * .26) 999px 999px;
+  background:linear-gradient(104deg,
+      rgba(255,255,255,.17)  0 5%,
+      rgba(255,255,255,.07)  11%,
+      rgba(255,255,255,.03)  20%,
+      rgba(255,255,255,.012) 46%,
+      rgba(255,255,255,.02)  72%,
+      rgba(255,255,255,.09)  88%,
+      rgba(255,255,255,.03)  100%) padding-box;
+  -webkit-backdrop-filter:blur(3px) brightness(1.06);
+  backdrop-filter:blur(3px) brightness(1.06);
+  box-shadow:
+    inset 0 0 0 1px rgba(160,190,230,.30),
+    inset 0 0 calc(var(--bs) * .22) rgba(140,180,235,.14),
+    inset 0 calc(var(--bs) * -.10) calc(var(--bs) * .18) rgba(255,255,255,.16),
+    0 0 calc(var(--bs) * .45) rgba(190,215,255,.22),
+    2px 3px 0 rgba(0,0,0,.18),
+    0 calc(var(--bs) * .26) calc(var(--bs) * .48) rgba(0,0,0,.5);
   animation:logoBob 2.6s ease-in-out infinite;
 }
-.logoTubes i:nth-child(2){animation-delay:.18s}
-.logoTubes i:nth-child(3){animation-delay:.36s}
-@keyframes logoBob{50%{transform:translateY(-7px) rotate(-2deg)}}
+.lt:nth-child(2){animation-delay:.18s}
+.lt:nth-child(3){animation-delay:.36s}
+/* the moulded white wall: the same gradient ring the board's tubes wear */
+.lt::before{
+  content:"";display:none;position:absolute;
+  inset:calc(var(--bs) * -.09);
+  border-radius:inherit;
+  padding:calc(var(--bs) * .09);
+  background:linear-gradient(112deg,
+      #ffffff 0 30%, #f5f8fc 44%, #d3dbe7 58%,
+      #fbfcfe 72%, #ffffff 88%, #e2e8f1 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  pointer-events:none;
+}
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor){
+  .lt{border-color:transparent}
+  .lt::before{display:block}
+}
+
+/* one ball, moulded the way the board moulds its own */
+.lt b{
+  display:block;width:var(--bs);height:var(--bs);position:relative;
+  border-radius:50%;background:var(--c);
+  box-shadow:
+    inset 0 calc(var(--bs) * -.20) calc(var(--bs) * .28) rgba(0,0,0,.30),
+    inset 0 calc(var(--bs) *  .12) calc(var(--bs) * .18) rgba(255,255,255,.22),
+    inset 0 calc(var(--bs) * -.07) calc(var(--bs) * .12) rgba(255,255,255,.40),
+    inset 0 calc(var(--bs) * -.02) 0 calc(var(--bs) * .02) rgba(255,255,255,.34),
+    0 calc(var(--bs) * .09) calc(var(--bs) * .16) rgba(0,0,0,.45);
+}
+.lt b::after{   /* the glossy catchlight */
+  content:"";position:absolute;left:17%;top:11%;width:32%;height:25%;
+  border-radius:50% 50% 44% 56% / 60% 58% 42% 40%;
+  background:linear-gradient(140deg,#fff 0%,rgba(255,255,255,.92) 45%,rgba(255,255,255,.45) 100%);
+  transform:rotate(-18deg);
+}
+
+@keyframes logoBob{50%{transform:translateY(-6px)}}
 
 .logo{
-  margin:0;font-size:clamp(30px,9vw,44px);font-weight:900;letter-spacing:.04em;line-height:1;
+  margin:0;font-size:clamp(34px,10.5vw,52px);font-weight:900;letter-spacing:.04em;line-height:1;
   background:linear-gradient(180deg,#fff 0%,#dfe6f2 50%,#93a3bd 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 3px 0 rgba(0,0,0,.45));
@@ -508,38 +807,56 @@ body{
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .logo em{
-  display:block;margin-top:7px;font:600 12px/1 inherit;font-style:normal;
+  display:block;margin-top:8px;
+  /* longhand on purpose: `font:600 12px/1 inherit` is an invalid shorthand
+     (inherit is not a font-family), so the whole declaration was being thrown
+     away and this line was inheriting the logo's own 40-odd pixels */
+  font-weight:600;font-size:clamp(10px,3vw,14px);line-height:1;font-style:normal;
+  /* the tracking is what makes it read as a strapline, and it is also what
+     would make it wrap - it may shrink, but it may not break */
+  white-space:nowrap;
   letter-spacing:.34em;text-transform:uppercase;color:#8b8b98;
   -webkit-text-fill-color:#8b8b98;filter:none;
 }
 
 .homeMid{width:100%;max-width:380px;display:flex;flex-direction:column;gap:16px}
 
-.progressCard{
-  padding:13px 15px;border-radius:18px;
-  background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);
-  backdrop-filter:blur(6px);
+/* the gift and the gear ride under the stats rather than off in a corner */
+.homeIcons{display:flex;justify-content:center;gap:12px}
+.homeIc{
+  position:relative;width:44px;height:44px;flex:0 0 auto;
+  border:1px solid rgba(255,255,255,.10);border-radius:14px;cursor:pointer;
+  background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05));
+  box-shadow:0 3px 0 rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.14);
+  color:#e9e9ec;font-size:20px;line-height:1;
+  transition:transform .1s,filter .12s;
 }
-.pcRow{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.pcRow.small{margin-top:8px;font-size:11px;color:#9a9aa6}
-.pcLabel{font-size:11px;color:#8d8d99;letter-spacing:.05em;text-transform:uppercase}
-.pcLevel{font-size:19px;font-weight:800}
-.pcBar{margin-top:9px;height:7px;border-radius:99px;background:rgba(0,0,0,.42);overflow:hidden}
-.pcBar i{
-  display:block;height:100%;border-radius:99px;
-  background:linear-gradient(90deg,#2f9ce0,#5cd0f5);
-  box-shadow:0 0 10px rgba(60,180,240,.6);
-  transition:width .5s cubic-bezier(.2,1,.3,1);
+.homeIc:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.34)}
+.homeIc[hidden]{display:none}
+.homeIc .dot{
+  display:none;position:absolute;top:-3px;right:-3px;width:11px;height:11px;
+  border-radius:50%;background:#e2483c;box-shadow:0 0 0 2px #1b1b21;
 }
+.homeIc .dot.on{display:block;animation:dotPulse 1.4s ease-in-out infinite}
+
+/* stars and coins sit under Play, not in a chip in the corner */
+.homeStats{display:flex;justify-content:center;gap:36px;font-weight:800}
+.homeStats .stat{display:flex;align-items:center;gap:9px;font-size:21px}
+.homeStats .star{
+  font-style:normal;font-size:25px;line-height:1;color:#ffc21e;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));
+}
+.homeStats .coin{width:24px;height:24px}
 
 .playBtn{
   position:relative;overflow:hidden;
   width:100%;padding:19px 10px;border:0;border-radius:20px;cursor:pointer;
   background:linear-gradient(180deg,#63d97a 0%,#33b455 55%,#1d8a3c 100%);
-  color:#04210d;font:900 24px/1 inherit;letter-spacing:.09em;
+  color:#04210d;font-weight:900;font-size:24px;line-height:1;letter-spacing:.09em;
   box-shadow:0 6px 0 #14682c,0 14px 26px rgba(0,0,0,.5);
   animation:playPulse 2.4s ease-in-out infinite;
 }
+.playBtn b{font-size:1.1em}
 .playBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #14682c,0 8px 16px rgba(0,0,0,.5);animation:none}
 .playBtn::after{
   content:"";position:absolute;top:0;left:-60%;width:38%;height:100%;
@@ -548,26 +865,11 @@ body{
 }
 @keyframes playPulse{50%{transform:scale(1.022)}}
 
-.homeRow{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
-.homeBtn{
-  position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;
-  padding:12px 3px;border:0;border-radius:16px;cursor:pointer;
-  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.07);
-  color:#e9e9ec;transition:transform .1s,background .12s;
-}
-.homeBtn:active{transform:scale(.93);background:rgba(255,255,255,.14)}
-.homeBtn b{font-size:21px;line-height:1}
-.homeBtn span{font-size:10.5px;color:#a9a9b4}
-.homeBtn .dot{
-  display:none;position:absolute;top:7px;right:9px;width:9px;height:9px;
-  border-radius:50%;background:#e2483c;box-shadow:0 0 0 2px #1b1b21;
-}
-.homeBtn .dot.on{display:block;animation:dotPulse 1.4s ease-in-out infinite}
 @keyframes dotPulse{50%{transform:scale(1.35)}}
 
 .modeSwitch{display:flex;padding:3px;border-radius:13px;background:rgba(255,255,255,.07)}
 .modeSwitch .mode{
-  border:0;background:transparent;color:#8d8d96;font:700 12px/1 inherit;
+  border:0;background:transparent;color:#8d8d96;font-weight:700;font-size:12px;line-height:1;
   padding:9px 16px;border-radius:10px;cursor:pointer;transition:.15s;
 }
 .modeSwitch .mode.active{background:rgba(255,255,255,.14);color:#fff}
@@ -595,7 +897,7 @@ body{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
   background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.04));
   border:1px solid rgba(255,255,255,.08);
-  color:#e9e9ec;font:800 16px/1 inherit;
+  color:#e9e9ec;font-weight:800;font-size:16px;line-height:1;
   box-shadow:0 3px 0 rgba(0,0,0,.32),0 7px 14px rgba(0,0,0,.34);
   transition:transform .1s;
 }
@@ -615,10 +917,10 @@ body{
 /* ═══════════════════════ win reward line ═══════════════════════ */
 .reward{
   display:none;align-items:center;justify-content:center;gap:7px;
-  margin:0 auto 14px;padding:8px 18px;border-radius:14px;width:fit-content;
+  margin:0 auto 18px;padding:11px 24px;border-radius:17px;width:fit-content;
   background:linear-gradient(100deg,rgba(255,196,60,.20),rgba(255,140,30,.14));
   border:1px solid rgba(255,200,80,.34);
-  font-size:17px;font-weight:900;color:#ffd979;
+  font-size:22px;font-weight:900;color:#ffd979;
 }
 .reward.on{display:flex}
 .reward.pop{animation:rewardPop .55s cubic-bezier(.2,1.7,.4,1)}
@@ -645,24 +947,6 @@ body{
   font-style:normal;font-size:30px;color:#63d97a;text-shadow:0 2px 6px rgba(0,0,0,.6);
 }
 
-/* ═══════════════════════════ shop ═══════════════════════════ */
-.shopList{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
-.shopItem{
-  display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:16px;
-  background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07);
-}
-.shopItem .si{
-  flex:0 0 42px;height:42px;border-radius:13px;background:rgba(255,255,255,.09);
-  display:flex;align-items:center;justify-content:center;font-size:20px;
-}
-.shopItem .sn{flex:1;text-align:left;font-size:14px;font-weight:700}
-.shopItem .sn em{display:block;font-style:normal;font-size:11px;font-weight:600;color:#8f8f9b;margin-top:2px}
-.shopItem .buy{flex:0 0 auto;padding:10px 13px;font-size:12.5px;border-radius:12px}
-.shopItem .buy:disabled{opacity:.4;cursor:default}
-
-.btn.danger{background:rgba(226,72,60,.16);border:1px solid rgba(226,72,60,.4);color:#ff9d94}
-.sub.tiny{font-size:11px;margin:12px 0 6px;color:#7f7f8b}
-
 /* ═════════════════════ level-1 walkthrough ═════════════════════ */
 #tutor{
   position:absolute;inset:0;z-index:8;
@@ -670,19 +954,6 @@ body{
   display:none;
 }
 #tutor.on{display:block}
-
-/* the spotlight is a hole punched by a very wide shadow, so the tube it
-   frames stays fully lit and everything else drops back */
-#tutorSpot{
-  position:absolute;display:block;opacity:0;
-  border:2px solid rgba(255,213,61,.95);
-  box-shadow:0 0 0 9999px rgba(0,0,0,.68),0 0 24px rgba(255,213,61,.55);
-  transition:left .3s cubic-bezier(.2,1,.3,1),top .3s,width .3s,height .3s,opacity .25s;
-}
-#tutorSpot.on{opacity:1;animation:spotPulse 1.5s ease-in-out infinite}
-@keyframes spotPulse{
-  50%{box-shadow:0 0 0 9999px rgba(0,0,0,.68),0 0 34px rgba(255,213,61,.9)}
-}
 
 #tutorHand{
   position:absolute;display:block;font-style:normal;font-size:34px;
@@ -697,23 +968,112 @@ body{
   60%{transform:translate(-50%,-4px) scale(.97)}
 }
 
-#tutorMsg{
-  position:absolute;left:50%;bottom:42px;transform:translateX(-50%);
-  margin:0;width:min(360px,calc(100% - 28px));
-  padding:13px 16px;border-radius:16px;text-align:center;
-  background:rgba(18,18,22,.94);border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 12px 30px rgba(0,0,0,.6);
-  font-size:14px;line-height:1.5;color:#e9e9ec;
-  animation:msgIn .32s cubic-bezier(.2,1.4,.4,1);
-}
-#tutorMsg b{color:#ffd53d}
-@keyframes msgIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}}
+/* ════════════════ phone landscape ════════════════ */
+/* A phone on its side is all width and no height, so every screen has to stop
+   spending height it does not have. Last in the file on purpose: these rules
+   override the portrait ones above at equal specificity. */
+@media (orientation:landscape) and (max-height:560px){
+  :root{--appW:100vw}
 
-#tutorSkip{
-  position:absolute;left:50%;bottom:4px;transform:translateX(-50%);
-  pointer-events:auto;
-  padding:7px 14px;border:0;border-radius:11px;cursor:pointer;
-  background:rgba(255,255,255,.12);color:#c9c9d2;
-  font:600 11.5px/1 inherit;
+  .bar{padding-top:calc(env(safe-area-inset-top) + 5px);padding-bottom:5px}
+  .ic{width:32px;height:32px;border-radius:10px}
+  #levelNum{font-size:17px}
+
+  /* the board keeps the height; the boosters move to a strip down the
+     right-hand side, which is where the thumb already is */
+  #screenGame.on{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto 1fr}
+  #screenGame .bar{grid-column:1/3}
+  #board{grid-column:1;grid-row:2}
+  #toolbar{
+    grid-column:2;grid-row:2;
+    flex-direction:column;justify-content:center;gap:9px;
+    padding:0 calc(env(safe-area-inset-right) + 10px) 0 2px;
+  }
+  .tool{flex:0 0 auto;width:76px;max-width:none;padding:8px 4px}
+
+  /* home: the logo sits beside the buttons instead of on top of them */
+  #screenHome{
+    flex-direction:row;flex-wrap:wrap;align-content:center;
+    gap:10px 24px;padding:10px 20px;
+  }
+  .homeTop{flex:0 1 auto;min-width:0}
+  .logoTubes{margin-bottom:9px;gap:9px;--bs:24px}
+  .logo{font-size:26px}
+  .logo em{margin-top:5px;font-size:10px;letter-spacing:.24em}
+  .homeMid{flex:0 1 340px;width:auto;gap:12px}
+  .playBtn{padding:13px;font-size:21px}
+  .homeStats{gap:26px}
+  .homeStats .stat{font-size:18px}
+  .homeIcons{gap:8px}
+  .homeIc{width:36px;height:36px;border-radius:12px;font-size:16px}
+
+  /* levels: give the grid every pixel the toolbars are not using */
+  .lvTools{padding-bottom:6px}
+  .lvPages{padding-bottom:4px}
+  .lvGrid{grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:8px;padding-bottom:10px}
 }
-#tutorSkip:active{background:rgba(255,255,255,.2)}
+
+/* ════════════════ desktop landscape ════════════════ */
+/* On a wide monitor the phone column is a strip with a dark field either side.
+   The backdrop is what fixes that - a painting with the stage light down the
+   middle - and Home stays the same centred stack it is on a phone, only
+   drawn much larger. */
+@media (min-width:900px) and (min-height:600px){
+
+  /* a wide window gets its own painting, which carries the stage light down
+     the middle - so the portrait art and the blurred wash it needed both go
+     away, and this one simply covers the viewport */
+  #bg::before{
+    background-image:url(assets/bg-wide.jpg);
+    filter:none;transform:none;
+  }
+  #bg::after{display:none}
+
+  /* a desktop HUD sized for a monitor, not a phone held at arm's length */
+  .bar{gap:14px;padding:18px 22px 14px}
+  .ic{width:56px;height:56px;border-radius:17px;font-size:26px}
+  .ic.mid{top:12px}
+  .ic.mid img{width:70px;height:70px}
+  #levelPill{padding:11px 22px;border-radius:16px;gap:9px}
+  #levelPill .lbl{font-size:16px}
+  #levelNum{font-size:32px}
+  .wallet{font-size:22px;padding:10px 20px 10px 14px}
+  .wallet b{font-size:23px}
+  .wallet .coin{width:28px;height:28px}
+  #toolbar{gap:26px;padding-top:14px}
+  .tool{padding:14px}
+  .tool img.gl{width:76px;height:76px}
+  .price{min-width:30px;height:27px;padding:0 9px;border-radius:14px;font-size:16px;line-height:27px}
+  .cost{margin-top:8px;padding:4px 14px;font-size:18px;line-height:24px}
+  .cost .coin{width:19px;height:19px}
+
+  .winPanel{max-width:500px}
+  .winInner{padding:40px 34px 32px}
+  .winLevel{font-size:17px;padding:8px 22px}
+  .winTitle{font-size:44px}
+  .praise{font-size:22px}
+  .reward{font-size:26px;padding:13px 28px}
+  .btn.sq{flex:0 0 74px;font-size:29px}
+  .btn.grow{font-size:22px}
+
+  .panel{max-width:470px;padding:40px 34px 30px;border-radius:30px}
+  .panel h2{font-size:34px;margin-bottom:10px}
+  .panel p{font-size:19px;margin-bottom:26px}
+  .panel .sub .coin{width:23px;height:23px}
+  .btn{padding:19px 14px;border-radius:18px;font-size:20px}
+  .btn.wide{margin-top:11px}
+
+  #screenHome{gap:44px}
+  .logoTubes{gap:22px;margin-bottom:30px;--bs:70px}
+  .logo{font-size:clamp(56px,5.6vw,82px)}
+  .logo em{margin-top:16px;font-size:17px;letter-spacing:.42em}
+
+  .homeMid{max-width:440px;gap:26px}
+  .playBtn{padding:26px 10px;font-size:32px;border-radius:26px}
+  .homeStats{gap:48px}
+  .homeStats .stat{font-size:26px;gap:11px}
+  .homeStats .star{font-size:31px}
+  .homeStats .coin{width:30px;height:30px}
+  .homeIcons{gap:14px}
+  .homeIc{width:54px;height:54px;border-radius:17px;font-size:25px}
+}

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -17,43 +17,28 @@
 
   <!-- ═══════════════════════════ HOME ═══════════════════════════ -->
   <section id="screenHome" class="screen">
-    <div class="wallet" data-wallet><b>🪙</b><span class="coinNum">0</span></div>
-
     <div class="homeTop">
+      <!-- the logo is drawn, not an image: three glass tubes of real round
+           balls, same moulding as the ones on the board -->
       <div class="logoTubes" aria-hidden="true">
-        <i style="--c1:#1f9ce8;--c2:#d4141c;--c3:#4ddc10;--c4:#f08000"></i>
-        <i style="--c1:#e8de10;--c2:#8b2fd6;--c3:#ff8ec4;--c4:#14c8c0"></i>
-        <i style="--c1:#4ddc10;--c2:#1f9ce8;--c3:#f08000;--c4:#d4141c"></i>
+        <i class="lt"><b style="--c:#1f9ce8"></b><b style="--c:#d4141c"></b><b style="--c:#4ddc10"></b><b style="--c:#f08000"></b></i>
+        <i class="lt"><b style="--c:#e8de10"></b><b style="--c:#8b2fd6"></b><b style="--c:#ff8ec4"></b><b style="--c:#14c8c0"></b></i>
+        <i class="lt"><b style="--c:#4ddc10"></b><b style="--c:#1f9ce8"></b><b style="--c:#f08000"></b><b style="--c:#d4141c"></b></i>
       </div>
       <h1 class="logo"><span>BALL</span> SORT<em>color puzzle</em></h1>
     </div>
 
     <div class="homeMid">
-      <div class="progressCard">
-        <div class="pcRow">
-          <span class="pcLabel">Đang ở</span>
-          <b class="pcLevel" id="homeLevel">Cấp độ 1</b>
-        </div>
-        <div class="pcBar"><i id="homeBar"></i></div>
-        <div class="pcRow small">
-          <span id="homeCleared">0 màn đã qua</span>
-          <span id="homeStars">★ 0</span>
-        </div>
+      <button class="playBtn" id="btnPlay"><span>LEVEL <b id="homeLevel">1</b></span></button>
+
+      <div class="homeStats">
+        <span class="stat"><i class="coin"></i><b class="coinNum">0</b></span>
       </div>
 
-      <button class="playBtn" id="btnPlay"><span>CHƠI</span></button>
-
-      <div class="homeRow">
-        <button class="homeBtn" id="btnLevels"><b>🗺️</b><span>Chọn màn</span></button>
-        <button class="homeBtn" id="btnDaily"><b>🎁</b><span>Quà ngày</span><i class="dot" id="dailyDot"></i></button>
-        <button class="homeBtn" id="btnShop"><b>🛒</b><span>Cửa hàng</span></button>
-        <button class="homeBtn" id="btnSettings"><b>⚙️</b><span>Cài đặt</span></button>
+      <div class="homeIcons">
+        <button class="homeIc" id="btnDaily" title="Daily gift">🎁<i class="dot" id="dailyDot"></i></button>
+        <button class="homeIc" id="btnSettings" title="Settings">⚙️</button>
       </div>
-    </div>
-
-    <div class="modeSwitch" id="homeMode">
-      <button class="mode active" data-mode="classic">Cổ điển</button>
-      <button class="mode" data-mode="hard">Khó</button>
     </div>
   </section>
 
@@ -61,19 +46,19 @@
   <section id="screenLevels" class="screen">
     <header class="bar">
       <button class="ic" data-back>‹</button>
-      <div class="barTitle">Chọn màn</div>
+      <div class="barTitle">Levels</div>
       <div class="spacer"></div>
-      <div class="wallet" data-wallet><b>🪙</b><span class="coinNum">0</span></div>
+      <div class="wallet" data-wallet><i class="coin"></i><span class="coinNum">0</span></div>
     </header>
 
     <div class="lvTools">
       <div class="modeSwitch" id="lvMode">
-        <button class="mode active" data-mode="classic">Cổ điển</button>
-        <button class="mode" data-mode="hard">Khó</button>
+        <button class="mode active" data-mode="classic">Classic</button>
+        <button class="mode" data-mode="hard">Hard</button>
       </div>
       <div class="jump">
-        <input id="lvJump" type="number" min="1" inputmode="numeric" placeholder="Tới màn…">
-        <button class="btn primary" id="btnJump">Đi</button>
+        <input id="lvJump" type="number" min="1" inputmode="numeric" placeholder="Go to level…">
+        <button class="btn primary" id="btnJump">Go</button>
       </div>
     </div>
 
@@ -89,37 +74,37 @@
   <!-- ═══════════════════════════ GAME ═══════════════════════════ -->
   <section id="screenGame" class="screen">
     <header class="bar" id="topbar">
-      <button class="ic" data-back>‹</button>
+      <button class="ic" id="btnGameSet" title="Settings">⚙️</button>
       <div id="levelPill">
-        <span class="lbl">Màn</span>
+        <span class="lbl">Level</span>
         <span id="levelNum">1</span>
+        <!-- only on a level that is hard for *this* player - see dda.js -->
+        <span class="levelTag" id="levelTag" hidden></span>
       </div>
       <div class="spacer"></div>
-      <div id="moveBox"><span class="lbl">Bước</span> <span id="moveNum">0</span></div>
-      <div class="wallet" data-wallet><b>🪙</b><span class="coinNum">0</span></div>
-      <button class="ic" id="btnSound" title="Bật/tắt tiếng">🔊</button>
+      <button class="ic mid" id="btnRestart" title="Restart"><img src="assets/boosters/restart.png" srcset="assets/boosters/restart.png 1x, assets/boosters/restart@2x.png 2x" alt=""></button>
+      <div class="wallet" data-wallet><i class="coin"></i><span class="coinNum">0</span></div>
     </header>
 
     <main id="board">
       <div id="tubes"></div>
       <div id="balls"></div>
       <div id="fx"></div>
-      <!-- inside the board so the message and the skip button stay clear of
-           the header and the toolbar; the spotlight's shadow is unclipped and
-           still dims the whole page -->
+      <!-- the whole lesson is one hand pointing at the tube to tap next, so
+           it lives inside the board and is measured against it -->
       <div id="tutor">
-        <i id="tutorSpot"></i>
         <i id="tutorHand">👆</i>
-        <button id="tutorSkip">Bỏ qua hướng dẫn</button>
-        <p id="tutorMsg"></p>
       </div>
     </main>
 
     <footer id="toolbar">
-      <button class="tool" id="btnUndo"><span class="gl">↺</span><span class="tx">Hoàn tác</span></button>
-      <button class="tool" id="btnRestart"><span class="gl">⟳</span><span class="tx">Chơi lại</span></button>
-      <button class="tool" id="btnAdd"><span class="gl">＋</span><span class="tx">Thêm ống</span><span class="price" id="priceTube">60</span></button>
-      <button class="tool" id="btnHint"><span class="gl">💡</span><span class="tx">Gợi ý</span><span class="price" id="priceHint">20</span></button>
+      <button class="tool" id="btnUndo"><img class="gl" src="assets/boosters/undo.png" srcset="assets/boosters/undo.png 1x, assets/boosters/undo@2x.png 2x" alt=""></button>
+      <!-- Hint is wired up and keeps its icon; drop the `hidden` to bring it
+           back. Restart lives in the HUD now. -->
+      <button class="tool" id="btnAdd"><img class="gl" src="assets/boosters/tube.png" srcset="assets/boosters/tube.png 1x, assets/boosters/tube@2x.png 2x" alt=""><span class="price" id="priceTube">60</span></button>
+      <button class="tool" id="btnHint" hidden><img class="gl" src="assets/boosters/hint.png" srcset="assets/boosters/hint.png 1x, assets/boosters/hint@2x.png 2x" alt=""><span class="price" id="priceHint">20</span></button>
+      <!-- earned every few wins, never sold; hidden until there is one in hand -->
+      <button class="tool" id="btnSkip" title="Skip level" hidden><img class="gl" src="assets/ui/skip.png" srcset="assets/ui/skip.png 1x, assets/ui/skip@2x.png 2x" alt=""></button>
     </footer>
   </section>
 
@@ -134,60 +119,82 @@
   <div class="winPanel">
     <div class="rays"></div>
     <div class="winInner">
-      <div class="winLevel" id="winLevel">Cấp độ 1</div>
-      <h2 class="winTitle">HOÀN THÀNH!</h2>
+      <div class="winLevel" id="winLevel">Level 1</div>
+      <h2 class="winTitle">COMPLETE!</h2>
 
-      <div class="stars">
-        <i class="star" data-i="0">★</i>
-        <i class="star mid" data-i="1">★</i>
-        <i class="star" data-i="2">★</i>
-      </div>
+      <div class="praise" id="winPraise">Awesome!</div>
 
-      <div class="praise" id="winPraise">Tuyệt vời!</div>
-
-      <div class="reward" id="winReward"><b>🪙</b><span id="winCoins">+10</span></div>
+      <div class="reward" id="winReward"><i class="coin"></i><span id="winCoins">+10</span></div>
 
       <div class="winRow">
-        <button class="btn ghost sq" id="btnHome" title="Về trang chính">🏠</button>
-        <button class="btn ghost sq" id="btnReplay" title="Chơi lại">↺</button>
-        <button class="btn primary grow" id="btnNext"><span>Màn tiếp</span> →</button>
+        <button class="btn ghost sq" id="btnHome" title="Home">🏠</button>
+        <button class="btn ghost sq" id="btnReplay" title="Restart">↺</button>
+        <button class="btn primary grow" id="btnNext"><span>Next level</span> →</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ═════════════════════════ NO WAY TO MOVE ═════════════════════════ -->
+<div id="stuckOverlay" class="overlay">
+  <div class="panel stuckPanel">
+    <img class="stuckArt" src="assets/ui/stuck.png"
+         srcset="assets/ui/stuck.png 1x, assets/ui/stuck@2x.png 2x" alt="">
+    <h2>Nowhere to go</h2>
+    <p class="sub">No ball can move from here. You can:</p>
+    <ul class="ways">
+      <li><b>Undo</b> a move, or <b>add a tube</b> with a booster</li>
+      <li><b>Restart</b> the level and try a different order</li>
+      <li><b>Go home</b> and come back to it later</li>
+    </ul>
+    <button class="btn primary wide" id="stuckOk">Got it</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ SKIP CONFIRM ═══════════════════════════ -->
+<div id="skipOverlay" class="overlay">
+  <div class="panel">
+    <h2>Skip this level?</h2>
+    <p class="sub">It stays unfinished — no stars, no coins — and you can come
+      back to it any time. You have one skip.</p>
+    <button class="btn primary wide" id="skipYes">Skip it</button>
+    <button class="btn ghost wide" data-close>Keep playing</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════ RESTART CONFIRM ═══════════════════════ -->
+<div id="askOverlay" class="overlay">
+  <div class="panel">
+    <h2>Restart level?</h2>
+    <p class="sub">The balls go back where they started.</p>
+    <button class="btn primary wide" id="askYes">Restart</button>
+    <button class="btn ghost wide" data-close>Cancel</button>
   </div>
 </div>
 
 <!-- ════════════════════════ DAILY REWARD ════════════════════════ -->
 <div id="dailyOverlay" class="overlay">
   <div class="panel">
-    <h2>Quà mỗi ngày</h2>
-    <p class="sub">Vào chơi mỗi ngày để nhận thưởng lớn hơn</p>
+    <h2>Daily Gift</h2>
+    <p class="sub">Play every day for a bigger reward</p>
     <div class="dayRow" id="dayRow"></div>
-    <button class="btn primary wide" id="btnClaim">Nhận thưởng</button>
-    <button class="btn ghost wide" data-close>Để sau</button>
-  </div>
-</div>
-
-<!-- ═══════════════════════════ SHOP ═══════════════════════════ -->
-<div id="shopOverlay" class="overlay">
-  <div class="panel">
-    <h2>Cửa hàng</h2>
-    <p class="sub">Ví của bạn: <b class="coinNum" data-wallet>0</b> 🪙</p>
-    <div class="shopList" id="shopList"></div>
-    <button class="btn ghost wide" data-close>Đóng</button>
+    <button class="btn primary wide" id="btnClaim">Claim</button>
+    <button class="btn ghost wide" data-close>Later</button>
   </div>
 </div>
 
 <!-- ═════════════════════════ SETTINGS ═════════════════════════ -->
 <div id="settingsOverlay" class="overlay">
   <div class="panel">
-    <h2>Cài đặt</h2>
+    <h2>Settings</h2>
     <div class="settings">
-      <label class="sw"><span>🔔 Âm thanh</span><input type="checkbox" id="optSfx" checked><i></i></label>
-      <label class="sw"><span>🎵 Nhạc nền</span><input type="checkbox" id="optMusic" checked><i></i></label>
+      <label class="sw"><span>🔔 Sound</span><input type="checkbox" id="optSfx" checked><i></i></label>
+      <label class="sw"><span>🎵 Music</span><input type="checkbox" id="optMusic" checked><i></i></label>
+      <label class="sw"><span>💡 Stuck alerts</span><input type="checkbox" id="optAlert" checked><i></i></label>
     </div>
-    <p class="sub tiny" id="setInfo"></p>
-    <button class="btn danger wide" id="btnReset">Xoá toàn bộ tiến độ</button>
-    <button class="btn ghost wide" data-close>Đóng</button>
+    <button class="btn ghost wide" id="btnQuit">🏠 Back to home</button>
+    <button class="btn danger wide" id="btnReset">Erase all progress</button>
+    <button class="btn ghost wide" data-close>Close</button>
   </div>
 </div>
 
@@ -197,6 +204,7 @@
 <script src="data/par-hard.js"></script>
 <script src="src/save.js"></script>
 <script src="src/board.js"></script>
+<script src="src/dda.js"></script>
 <script src="src/tutorial.js"></script>
 <script src="src/ui.js"></script>
 </body>

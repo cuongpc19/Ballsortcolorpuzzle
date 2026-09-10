@@ -6,6 +6,10 @@
 *.aab
 *.mp4
 
+# Scratch: reference art and the prompt notes used to generate the UI assets.
+# Big, and not part of the game.
+/Manythings/
+
 # OS / editor noise
 Thumbs.db
 .DS_Store

@@ -37,6 +37,8 @@ function boot(seed) {
 const $ = (w, s) => w.document.querySelector(s);
 const $$ = (w, s) => [...w.document.querySelectorAll(s)];
 const badge = (w, id) => $(w, '#' + id + ' .price')?.textContent;
+/* a price badge draws its coin as an element, so its text is just the number */
+const hasCoin = (w, id) => !!$(w, '#' + id + ' .price .coin');
 const cls = (w, id) => $(w, '#' + id).className;
 
 (async function run() {
@@ -73,7 +75,8 @@ const cls = (w, id) => $(w, '#' + id).className;
     $(w, '#btnHint').click(); await sleep(40);
     ok(w.BS.save.own('hint') === i - 1, `dùng gợi ý → kho còn ${i - 1}`, w.BS.save.own('hint'));
   }
-  ok(badge(w, 'btnHint') === '🪙45', 'hết kho → hiện giá 45', badge(w, 'btnHint'));
+  ok(badge(w, 'btnHint') === '45' && hasCoin(w, 'btnHint'),
+     'hết kho → hiện đồng xu + giá 45', badge(w, 'btnHint'));
   ok(cls(w, 'btnHint').includes('buy'), 'nút chuyển sang class buy');
 
   const coinsBefore = w.BS.save.coins();
@@ -118,7 +121,7 @@ const cls = (w, id) => $(w, '#' + id).className;
   $(w, '#btnAdd').click(); await sleep(80);
   ok(w.BS.save.own('tube') === 0, 'dùng hết kho', w.BS.save.own('tube'));
   ok($$(w, '#tubes .tube').length === tubes0 + 3, 'tổng cộng thêm 3 ống', $$(w, '#tubes .tube').length);
-  ok(badge(w, 'btnAdd') === '🪙60', 'hết kho → hiện giá 60', badge(w, 'btnAdd'));
+  ok(badge(w, 'btnAdd') === '60', 'hết kho → hiện giá 60', badge(w, 'btnAdd'));
 
   /* ══════════════════════ free reset khi sang màn ══════════════════════ */
   head('Suất miễn phí reset mỗi màn (FreeAddTubeNum / UseFreeCount)');
@@ -128,7 +131,7 @@ const cls = (w, id) => $(w, '#' + id).className;
   ok(w.BS.save.own('tube') === 0, 'nhưng kho thì KHÔNG được hồi', w.BS.save.own('tube'));
 
   $(w, '#btnAdd').click(); await sleep(60);
-  ok(badge(w, 'btnAdd') === '🪙60', 'dùng free xong lại về giá vì kho rỗng', badge(w, 'btnAdd'));
+  ok(badge(w, 'btnAdd') === '60', 'dùng free xong lại về giá vì kho rỗng', badge(w, 'btnAdd'));
   $(w, '#btnRestart').click(); await sleep(300);
   ok(badge(w, 'btnAdd') === 'FREE', 'Chơi lại cũng reset suất free', badge(w, 'btnAdd'));
 

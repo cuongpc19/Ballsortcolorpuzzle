@@ -1,0 +1,192 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();if(seed)for(const[k,v]of Object.entries(seed))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),320);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+(async function(){
+  /* bsp_tutor:9 = đã học xong, để bàn tay không chen vào */
+  const w = await boot({ bsp_tutor: 9, bsp_max: { classic: 2000 } });
+  const B = () => w.BS.board;
+  const Q = () => w.BS.board.question;
+  const T = () => $$(w,'#tubes .tube');
+  const open = async (i) => { B().start('classic', i); await sleep(420); };
+
+  /* bi ẩn của một ống, tính từ đáy */
+  const hid = () => Q().hidden();
+  const st  = () => B().state();
+  const covered = () => hid().map((t,i)=>t.some(Boolean)?i:-1).filter(i=>i>=0);
+
+  head('Đúng những màn chia 10 dư 8');
+  for (const [lv, want] of [[8,true],[18,true],[28,true],[98,true],[7,false],[9,false],[10,false],[1,false]]) {
+    ok(Q().at(lv-1) === want, 'màn ' + lv + (want ? ' có bi ?' : ' không có'), Q().at(lv-1));
+  }
+
+  head('Vào màn 8: úp khoảng 1/3 số ống');
+  await open(7);
+  ok(Q().on(), 'màn 8 đang bật');
+  const tubes8 = st();
+  const filled8 = tubes8.filter(t=>t.length).length;
+  const cov8 = covered();
+  const want8 = Math.max(1, Math.round(filled8/3));
+  ok(cov8.length === want8,
+     filled8 + ' ống có bi → úp ' + want8 + ' ống', cov8.length);
+  ok(cov8.length < filled8, 'không úp hết cả bàn', cov8.length + '/' + filled8);
+
+  head('Trong ống bị úp: hở đúng bi trên cùng');
+  let shapeOk = true, topShown = true;
+  for (const i of cov8) {
+    const h = hid()[i];
+    if (h[h.length-1] !== false) topShown = false;
+    for (let b = 0; b < h.length - 1; b++) if (h[b] !== true) shapeOk = false;
+  }
+  ok(topShown, 'bi trên cùng luôn hiện màu');
+  ok(shapeOk, 'mọi bi phía dưới đều bị úp');
+  let clean = true;
+  for (let i = 0; i < hid().length; i++) if (!cov8.includes(i) && hid()[i].some(Boolean)) clean = false;
+  ok(clean, 'ống không được chọn thì không có bi nào bị úp');
+
+  head('Dấu ? hiện ra thật trên màn hình');
+  const marks = $$(w,'.ball .qmark').length;
+  const hiddenCount = hid().reduce((n,t)=>n+t.filter(Boolean).length,0);
+  ok(marks === hiddenCount, hiddenCount + ' bi úp → ' + hiddenCount + ' dấu ?', marks);
+  ok(hiddenCount > 0, 'có ít nhất một bi bị úp', hiddenCount);
+
+  head('Mở lại vẫn y như cũ');
+  const snap = JSON.stringify(covered());
+  await open(0); await open(7);
+  ok(JSON.stringify(covered()) === snap, 'cùng bộ ống bị úp', covered());
+  const w2 = await boot({ bsp_tutor: 9, bsp_max: { classic: 2000 } });
+  w2.BS.board.start('classic', 7); await sleep(420);
+  ok(JSON.stringify(w2.BS.board.question.hidden().map((t,i)=>t.some(Boolean)?i:-1).filter(i=>i>=0)) === snap,
+     'kể cả sau khi xoá sạch dữ liệu và tải lại', 'khác');
+
+  head('Nhấc bi trên cùng thì bi dưới lật mặt');
+  await open(7);
+  const pick = covered()[0];
+  const before = st()[pick].length;
+  const target = st().findIndex((t,j) => j !== pick && B().state()[j].length === 0);
+  ok(target >= 0, 'có ống trống để đổ sang');
+  T()[pick].click(); await sleep(120);
+  T()[target].click(); await sleep(700);
+  ok(st()[pick].length === before - 1, 'đi được đúng 1 bi', st()[pick].length);
+  const hAfter = hid()[pick];
+  ok(hAfter[hAfter.length-1] === false, 'bi vừa lộ ra đã hiện màu', hAfter);
+
+  head('Đã lộ rồi thì đổ đè lên cũng không úp lại');
+  /* Hoàn tác đổ đúng viên vừa đi trở lại chỗ cũ, nên nó đè lên viên vừa lộ —
+     không phải chờ may mắn có ống cùng màu. */
+  const seen = st()[pick][st()[pick].length-1];
+  $(w,'#btnUndo').click(); await sleep(700);
+  const back = st()[pick];
+  ok(back.length === before, 'hoàn tác đổ bi trở lại ống cũ', back.length);
+  ok(hid()[pick][back.length-2] === false,
+     'bi đã lộ (màu ' + seen + ') vẫn hiện dù bị đè lên', hid()[pick]);
+
+  head('Chuỗi cùng màu dừng ở bi úp');
+  /* tìm thế: ống bị úp mà bi thứ hai từ trên xuống cùng màu với bi trên cùng.
+     Không úp thì nhấc được 2 bi, úp thì chỉ 1. */
+  let found = null;
+  for (let lv = 7; lv < 400 && !found; lv += 10) {
+    await open(lv);
+    if (!Q().on()) continue;
+    const s = st(), h = hid();
+    for (const i of covered()) {
+      const t = s[i];
+      if (t.length >= 2 && t[t.length-1] === t[t.length-2] && h[i][t.length-2] === true) {
+        found = { lv: lv+1, i: i };
+        break;
+      }
+    }
+  }
+  ok(!!found, 'dựng được thế hai bi trên cùng cùng màu mà bi dưới bị úp',
+     found ? 'màn ' + found.lv : 'không có trong 40 màn đầu');
+  if (found) {
+    T()[found.i].click(); await sleep(220);
+    ok($$(w,'.ball.sel').length === 1,
+       'chỉ nhấc 1 bi chứ không hốt cả cụm', $$(w,'.ball.sel').length);
+  }
+
+  head('Màn thường thì không úp gì cả');
+  await open(8);
+  ok(!Q().on(), 'màn 9 tắt');
+  ok(hid().every(t=>t.every(x=>x===false)), 'không bi nào bị úp');
+  ok($$(w,'.ball .qmark').length === 0, 'không dấu ? nào trên màn hình',
+     $$(w,'.ball .qmark').length);
+
+  head('Tính điểm y như một màn thường');
+  ok(Q().parAllowance === undefined, 'không có ưu ái par nào cả', Q().parAllowance);
+  let info = null;
+  w.BS.on('won', i => info = i);
+  await open(7);
+  /* Đẩy điểm ra khỏi mốc giữa trước đã. Ở đúng 50 thì lực kéo về giữa bằng 0,
+     nên nếu màn này lỡ bị bỏ qua điểm vẫn là 50 và phép thử không bắt được gì. */
+  w.BS.dda.setScore(30);
+  const scoreBefore = w.BS.dda.state().score;
+  ok(scoreBefore === 30, 'đặt điểm về 30 để phép thử có sức nặng', scoreBefore);
+  /* Một kế hoạch, đi hết. Ống úp chỉ nhả 1 bi mỗi lượt nên nước "đi 3 bi"
+     phải bấm 3 lần — vẫn đúng kế hoạch, chỉ là chậm hơn. */
+  const path = B().plan();
+  ok(!!path, 'solver vạch được đường ra', path ? path.length + ' nước' : null);
+  for (const m of path || []) {
+    for (let k = 0; k < m.n; k++) {
+      if (st()[m.from].length === 0) break;
+      const n0 = st()[m.to].length;
+      T()[m.from].click(); await sleep(40);
+      T()[m.to].click(); await sleep(280);
+      if (st()[m.to].length === n0) break;   /* đã đủ bi, sang nước sau */
+    }
+  }
+  /* ống cuối đầy → ăn mừng → mới tới bảng thắng, mất khoảng một giây */
+  for (let k = 0; k < 30 && !info; k++) await sleep(100);
+  ok(!!info, 'giải xong được màn 8 dù bị úp bi',
+     'moves=' + B().moves() + ' board=' + JSON.stringify(st()));
+  if (info) ok(info.question === true, 'sự kiện thắng có cờ question', info.question);
+  /* Vạch sao vẫn là par gốc, không nới. */
+  const par8 = B().par('classic', B().src());
+  const ref8 = par8 || Math.max(1, info ? info.moves : 1);
+  const wantStars = info ? (info.moves <= ref8 * 1.10 ? 3
+                          : info.moves <= ref8 * 1.45 ? 2 : 1) : 0;
+  if (info) ok(info.stars === wantStars,
+    'sao chấm theo par gốc (' + par8 + ' nước, đi ' + info.moves + ' → '
+    + wantStars + ' sao)', info.stars);
+
+  await sleep(200);
+  /* DDA phải nhúc nhích đúng như với một màn thường cùng thành tích. */
+  const after = w.BS.dda.state().score;
+  const delta = info ? w.BS.dda.scoreFor(info, { undo: 0, tube: 0, hint: 0, replay: 0 }) : null;
+  const cfg = w.BS.dda.cfg;
+  const wantScore = info
+    ? Math.max(cfg.SCORE_MIN, Math.min(cfg.SCORE_MAX, Math.round(
+        (scoreBefore + delta) + (cfg.SCORE_START - (scoreBefore + delta)) * cfg.DECAY)))
+    : null;
+  ok(after === wantScore,
+     'điểm DDA đổi đúng như màn thường: ' + scoreBefore + ' + (' + delta + ') → ' + wantScore,
+     after);
+
+  head('Bảng màu đã tráo, không trùng bản gốc');
+  await open(4);
+  ok(w.getComputedStyle($$(w,'.ball')[0]).background.indexOf('rgb') >= 0, 'bi vẫn có màu');
+  /* màu 1 giờ là đỏ (gốc là xanh dương), màu 3 là xanh dương (gốc là xanh lá) */
+  await open(0);
+  const bg = i => { const b = $$(w,'.ball')[i]; return b ? w.getComputedStyle(b).backgroundImage : ''; };
+  ok(bg(0).indexOf('212, 20, 28') >= 0 || bg(0).indexOf('#d4141c') >= 0,
+     'chỉ số màu 1 nay là đỏ chứ không phải xanh dương', bg(0).slice(0,140));
+
+  out();
+})().catch(e=>{L.push('EXCEPTION: '+e.message+'\n'+e.stack);fail++;out();});
+</script>

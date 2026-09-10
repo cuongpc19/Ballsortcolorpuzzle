@@ -40,6 +40,50 @@ màn 1 có đổi thì hướng dẫn vẫn đúng. Học xong (hoặc bấm *B�
 ghi vào `bsp_tutor` và không bao giờ hiện lại. Thẻ quà ngày cũng bị chặn không
 cho bật đè lên bài học.
 
+## Độ khó động (DDA)
+
+Bộ màn cổ điển chỉ dốc lên trong ~30 màn đầu rồi **phẳng lì suốt 15.000 màn**:
+từ màn 101 trở đi chỉ còn 9 màu và 12 màu đảo qua đảo lại, par trung bình đứng
+yên ở 32.9 từ khối 1.000 tới khối 15.000. Không phải họ làm ẩu — độ khó của bản
+gốc **không nằm ở danh sách màn**, mà ở một hệ thống chạy lúc runtime
+(`DynamicLevelMgr`) chọn màn theo phong độ người chơi, đọc cấu hình từ server.
+
+Bản này dựng lại đúng hình dạng đó:
+
+| Bản gốc | Ở đây |
+|---|---|
+| `DynamicScore` | điểm 10–90, bắt đầu 50 |
+| `undo_score` / `addtube_score` / `replay_score` | −1 / −6 / −8 |
+| `OnDynamicGameWin` | so số bước với par: +8 / +4 / 0 / −4 |
+| `dda_range1` / `dda_range2` + `min/max_performance_score` | hai nhóm, ngưỡng 45 và 55, có vùng đệm |
+| `dda_levelpool` (tải từ server) | 7.500 màn 9 màu + 7.500 màn 12 màu có sẵn |
+| `dda_start_level` | bật từ màn 101 |
+| `DynamicLastRefreshLevel` | tính lại nhóm mỗi 3 màn |
+
+Ba điểm đáng nói:
+
+**Chấm điểm một lần mỗi màn, lúc thắng.** Bản đầu tôi cộng/trừ ngay theo từng
+thao tác, và mô phỏng cho thấy *ai cũng leo lên trần* — vì thắng thì luôn được
+cộng, mà rồi ai cũng thắng. Cái phân biệt người chơi không phải việc họ qua màn,
+mà là qua màn tốn bao nhiêu.
+
+**Có lực kéo về giữa** (`DECAY`). Không có nó thì điểm là một bộ tích phân
+thuần: bất kỳ thói quen ổn định nào cũng đẩy nó vào biên rồi dính ở đó, và người
+vừa tiến bộ phải chơi hay bốn chục màn mới thấy khác. Có nó thì điểm đậu ở mức
+tương xứng với phong độ, và đổi phong độ thì hệ thống trả lời trong 3–4 màn.
+
+**Mỗi nhóm có một con trỏ riêng** chạy tới trong bể màn. Bản đầu tôi tìm màn
+cùng nhóm trong một cửa sổ quanh vị trí hiện tại, và sau ~12 màn cùng nhóm liên
+tiếp thì hết cửa sổ, nó **lặng lẽ trả về màn sai nhóm**. Con trỏ vừa đảm bảo
+không màn nào bị phát hai lần, vừa không bao giờ hết chỗ.
+
+Puzzle được **chốt ngay lần đầu mở màn** (`bsp_pick`) — nếu không thì kỷ lục và
+số sao của bạn ở màn 777 sẽ thuộc về một puzzle khác mỗi lần vào.
+
+Người chơi không thấy gì cả: không nút bật/tắt, không thông báo, không huy hiệu.
+Số màn vẫn đếm đều. Chỉ khác *puzzle nào* nằm sau con số đó. 100 màn đầu không
+bị đụng tới. `tests/sim.html` là bench để chỉnh các hằng số này.
+
 ## Booster — làm đúng theo APK gốc
 
 Metadata IL2CPP của bản gốc nói rõ booster của họ hoạt động thế nào, và bản này
@@ -74,7 +118,8 @@ npm run dev
 # rồi mở:
 #   http://localhost:5180/tests/boosters.html   (50 test)
 #   http://localhost:5180/tests/game.html       (41 test)
-#   http://localhost:5180/tests/tutorial.html   (28 test)
+#   http://localhost:5180/tests/tutorial.html   (20 test)
+#   http://localhost:5180/tests/dda.html        (49 test)
 ```
 
 `tests/boosters.html` bám sát hợp đồng booster ở trên: suất miễn phí không trừ
@@ -219,12 +264,15 @@ index.html                 khung tất cả các màn hình
 style.css                  nền động, ống 3D, pháo hoa, Home, lưới màn, popup
 src/save.js                tiến độ, sao, ví xu, kho booster, quà ngày
 src/board.js               luật chơi, dựng hình, âm thanh, hiệu ứng, solver
+src/dda.js                 độ khó động - chọn puzzle theo phong độ
 src/tutorial.js            bài hướng dẫn ở màn 1
 src/ui.js                  router + Home / Chọn màn / Cửa hàng / Quà / Cài đặt
 scripts/serve.mjs          dev server, không phụ thuộc gì
 tests/boosters.html        50 test cho booster & cửa hàng
 tests/game.html            41 test cho luồng chơi
-tests/tutorial.html        28 test cho bài hướng dẫn
+tests/tutorial.html        20 test cho bài hướng dẫn
+tests/dda.html             49 test cho độ khó động
+tests/sim.html             bench chỉnh số cho DDA (không phải test)
 data/levels-classic.js     15.100 màn cổ điển        (832 KB)
 data/levels-hard.js         2.596 màn khó            (181 KB)
 data/par-classic.js        số bước chuẩn, cổ điển     (30 KB)

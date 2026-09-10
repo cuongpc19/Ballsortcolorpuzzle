@@ -1,0 +1,158 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();if(seed)for(const[k,v]of Object.entries(seed))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),320);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+(async function(){
+  /* bsp_tutor:9 = đã học xong, để bàn tay không chen vào */
+  let w = await boot({ bsp_tutor: 9, bsp_max: { classic: 400 } });
+  const T = () => $$(w,'#tubes .tube');
+  const A = () => w.BS.board.autoImport;
+
+  head('Mặc định tắt hẳn — một nước đi là hai lần chạm');
+  ok(w.BS.AUTO_LEVELS === 0, 'mốc mặc định = 0 màn', w.BS.AUTO_LEVELS);
+  for (const lv of [0, 1, 2, 9, 99]) {
+    w.BS.board.start('classic', lv); await sleep(320);
+    ok(!A().on(), 'màn ' + (lv + 1) + ' tắt', A().on());
+  }
+  w.BS.board.start('classic', 1); await sleep(420);
+  const mv0 = w.BS.board.nextMove();
+  const mvBefore = w.BS.board.moves();
+  T()[mv0.from].click(); await sleep(320);
+  ok(w.BS.board.moves() === mvBefore, 'chạm một lần chưa đi nước nào',
+     w.BS.board.moves() - mvBefore);
+  ok($$(w,'.ball.sel').length > 0, 'mà nhấc bi lên chờ chạm lần hai');
+  T()[mv0.to].click(); await sleep(420);
+  ok(w.BS.board.moves() === mvBefore + 1, 'chạm lần hai mới đi', w.BS.board.moves());
+
+  head('Bật lại bằng mốc thì chạy đúng như cũ');
+  A().setLevels(2);
+  ok(A().levels() === 2, 'mốc = 2 màn', A().levels());
+  w.BS.board.start('classic', 0); await sleep(400);
+  ok(A().on(), 'màn 1 bật');
+  w.BS.board.start('classic', 1); await sleep(400);
+  ok(A().on(), 'màn 2 bật');
+  w.BS.board.start('classic', 2); await sleep(400);
+  ok(!A().on(), 'màn 3 tắt', A().on());
+
+  head('Một lần chạm là bi đi');
+  w.BS.board.start('classic', 1); await sleep(420);
+  const before = w.BS.board.moves();
+  const mv = w.BS.board.nextMove();
+  T()[mv.from].click(); await sleep(480);
+  ok(w.BS.board.moves() === before + 1, 'chạm 1 lần đã tính là 1 nước', w.BS.board.moves());
+  ok($$(w,'.ball.sel').length === 0, 'không còn bi nào treo lơ lửng chờ chạm lần hai');
+
+  head('Ưu tiên ống cùng màu / hai lựa chọn thì trả quyền');
+  /* Thế cờ đầu màn mọi ống đều đầy nên chỉ ống trống nhận được — phải đi
+     vài nước thật rồi mới có tình huống đáng kiểm. */
+  let found = null, amb = null;
+  for (let lv = 4; lv < 14 && (!found || !amb); lv++) {
+    w.BS.board.start('classic', lv); await sleep(300);
+    for (let step = 0; step < 14 && (!found || !amb); step++) {
+      const tubes = w.BS.board.state();
+      const cap = 4;
+      for (let i = 0; i < tubes.length; i++) {
+        if (!tubes[i].length) continue;
+        const c = tubes[i][tubes[i].length - 1];
+        let match = -1, matches = 0, empty = -1;
+        for (let j = 0; j < tubes.length; j++) {
+          if (i === j) continue;
+          if (!tubes[j].length) { if (empty === -1) empty = j; continue; }
+          if (tubes[j].length < cap && tubes[j][tubes[j].length - 1] === c) { matches++; match = j; }
+        }
+        if (!found && matches === 1 && empty !== -1) found = { i, match, empty, tgt: A().target(i) };
+        if (!amb && matches >= 2) amb = { i, tgt: A().target(i) };
+      }
+      const mv = w.BS.board.nextMove();
+      if (!mv) break;
+      T()[mv.from].click(); await sleep(30);
+      T()[mv.to].click(); await sleep(260);
+    }
+  }
+
+  ok(!!found, 'dựng được thế có cả ống cùng màu lẫn ống trống');
+  if (found) ok(found.tgt === found.match,
+    'chọn ống cùng màu (' + found.match + ') chứ không đổ vào ống trống (' + found.empty + ')', found.tgt);
+
+  ok(!!amb, 'dựng được thế có hai ống cùng màu đều nhận được');
+  if (amb) ok(amb.tgt === -1, 'hai lựa chọn thì auto-import chịu, trả quyền cho người chơi', amb.tgt);
+
+  if (amb) {
+    /* và khi bật, chạm vào ống đó phải nhấc bi lên chờ chứ không tự đi */
+    w.BS.board.start('classic', 4); await sleep(300);
+    A().setLevels(400);
+    let hit = null;
+    for (let step = 0; step < 14 && !hit; step++) {
+      const tubes = w.BS.board.state();
+      for (let i = 0; i < tubes.length && !hit; i++) {
+        if (tubes[i].length && A().target(i) === -1 && w.BS.board.nextMove()) {
+          let any = false;
+          for (let j = 0; j < tubes.length; j++) if (j !== i && tubes[j].length && tubes[j].length < 4 &&
+              tubes[j][tubes[j].length-1] === tubes[i][tubes[i].length-1]) any = true;
+          if (any) hit = i;
+        }
+      }
+      if (hit !== null) break;
+      const mv = w.BS.board.nextMove();
+      if (!mv) break;
+      T()[mv.from].click(); await sleep(260);
+      if ($$(w,'.ball.sel').length) { T()[mv.to].click(); await sleep(260); }
+    }
+    if (hit !== null) {
+      const before2 = w.BS.board.moves();
+      T()[hit].click(); await sleep(280);
+      ok(w.BS.board.moves() === before2, 'chạm vào thì KHÔNG tự đi', w.BS.board.moves() - before2);
+      ok($$(w,'.ball.sel').length > 0, 'mà nhấc bi lên chờ chọn ống');
+    } else {
+      ok(false, 'không dựng được thế hai lựa chọn khi đang bật auto');
+    }
+    A().setLevels(2);
+  }
+
+  head('Nới mốc ra thì màn nào cũng chạm 1 lần được');
+  w.BS.board.start('classic', 300); await sleep(420);
+  ok(!A().on(), 'màn 301 mặc định tắt');
+  A().setLevels(400);
+  ok(A().on(), 'nới mốc lên 400 thì màn 301 bật');
+  const m0 = w.BS.board.moves();
+  const mv2 = w.BS.board.nextMove();
+  T()[mv2.from].click(); await sleep(480);
+  ok(w.BS.board.moves() === m0 + 1, 'đi được 1 nước bằng 1 chạm', w.BS.board.moves() - m0);
+  A().setLevels(2);
+  ok(!A().on(), 'trả mốc về 2 thì màn 301 tắt lại');
+
+  head('Không còn công tắc trong Cài đặt');
+  ok($(w,'#optAuto') === null, 'ô "Chạm 1 lần" đã bị gỡ');
+  ok(w.BS.save.autoAlways === undefined, 'khoá lưu cũng bỏ luôn');
+  ok($(w,'#setInfo') === null, 'dòng thống kê trong Cài đặt cũng đã gỡ');
+
+  head('Đang dạy thì không chen ngang');
+  w = await boot({ bsp_max: { classic: 400 } });     /* chưa học */
+  /* mặc định đã tắt rồi, nên phải bật lên thì phép thử này mới có nghĩa */
+  w.BS.board.autoImport.setLevels(2);
+  $(w,'#btnPlay').click(); await sleep(900);
+  ok(w.BS.tutorial.active(), 'bàn tay đang chỉ');
+  ok(!w.BS.board.autoImport.on(), 'lúc đó auto-import nhường chỗ');
+  const mv3 = w.BS.board.nextMove();
+  T()[mv3.from].click(); await sleep(120);
+  ok($$(w,'.ball.sel').length > 0, 'vẫn phải chạm hai lần trong lúc học');
+
+  out();
+})().catch(e=>{L.push('EXCEPTION: '+e.message+'\n'+e.stack);fail++;out();});
+</script>
