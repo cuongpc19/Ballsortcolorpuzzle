@@ -23,6 +23,7 @@ var K = {
   music:  'bsp_music',
   daily:  'bsp_daily',    /* {streak, last: 'YYYY-MM-DD'}                  */
   seen:   'bsp_seen',     /* has the home screen been shown once           */
+  tutor:  'bsp_tutor',    /* has the level-1 walkthrough been finished     */
   bag:    'bsp_bag'       /* {undo,tube,hint} - boosters owned             */
 };
 
@@ -208,6 +209,10 @@ var save = BS.save = {
 
   seen: function () { return read(K.seen, false) === true; },
   setSeen: function () { write(K.seen, true); },
+
+  /** the level-1 walkthrough only ever runs once */
+  tutorDone: function () { return read(K.tutor, false) === true; },
+  setTutorDone: function () { write(K.tutor, true); },
 
   /* ------- the booster bag ------- */
 

@@ -51,7 +51,9 @@ const cls = (w, id) => $(w, '#' + id).className;
   ok(bag0.undo === 5 && bag0.tube === 2 && bag0.hint === 3, 'kho khởi điểm 5/2/3', bag0);
   ok($$(w, '.coinNum').every(e => e.textContent === '300'), 'ví hiển thị 300 ở mọi nơi');
 
-  $(w, '#btnPlay').click(); await sleep(320);
+  $(w, '#btnPlay').click(); await sleep(820);
+  if (w.BS.tutorial.active()) w.BS.tutorial.stop(true);   /* màn 1 có hướng dẫn */
+  await sleep(60);
   ok($(w, '#screenGame').classList.contains('on'), 'CHƠI mở màn chơi');
   ok(w.BS.board.ready(), 'bàn cờ đã dựng xong');
   ok($(w, '#levelNum').textContent === '1', 'vào đúng cấp độ 1');

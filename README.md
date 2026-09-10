@@ -23,10 +23,22 @@ là bộ test cần chạy qua http.
 | **Home** | logo, thẻ tiến độ (đang ở màn nào, đã qua bao nhiêu, tổng sao), nút CHƠI, 4 nút phụ, đổi chế độ, ví xu |
 | **Chọn màn** | lưới 60 ô mỗi trang, sao đã ăn trên từng ô, ô kế tiếp nổi bật, ô chưa tới thì khoá, ô nhảy nhanh tới màn bất kỳ |
 | **Chơi** | bàn cờ, 4 booster, ví xu, nút tắt tiếng |
-| **Hoàn thành màn** | sao, thưởng xu, số bước / chuẩn / thời gian / kỷ lục |
+| **Hoàn thành màn** | sao và thưởng xu |
 | **Quà mỗi ngày** | chuỗi 3 ngày, 100 → 150 → 250 xu, nhỡ một ngày là chuỗi reset |
 | **Cửa hàng** | mua booster bằng xu |
 | **Cài đặt** | âm thanh, nhạc nền, xoá tiến độ |
+
+## Hướng dẫn ở màn 1
+
+Người chơi mới vào màn 1 sẽ được dắt tay qua một nước đi: câu đầu nói mục tiêu,
+rồi đèn rọi + bàn tay chỉ vào ống cần nhấc bi, rồi chuyển sang ống cần thả vào.
+Trong lúc đó **chỉ ống đang được chỉ mới nhận chạm** — chạm chỗ khác chỉ rung
+nhẹ chứ không làm lệch bài học khỏi thế cờ.
+
+Hai ống được chỉ là do **solver tự tính** chứ không viết cứng, nên nếu dữ liệu
+màn 1 có đổi thì hướng dẫn vẫn đúng. Học xong (hoặc bấm *Bỏ qua hướng dẫn*) thì
+ghi vào `bsp_tutor` và không bao giờ hiện lại. Thẻ quà ngày cũng bị chặn không
+cho bật đè lên bài học.
 
 ## Booster — làm đúng theo APK gốc
 
@@ -61,14 +73,17 @@ Con số cụ thể (5/2/3, giá 30/60/45) là của bản này — bản gốc 
 npm run dev
 # rồi mở:
 #   http://localhost:5180/tests/boosters.html   (50 test)
-#   http://localhost:5180/tests/game.html       (42 test)
+#   http://localhost:5180/tests/game.html       (41 test)
+#   http://localhost:5180/tests/tutorial.html   (28 test)
 ```
 
 `tests/boosters.html` bám sát hợp đồng booster ở trên: suất miễn phí không trừ
 kho, hết kho thì mở cửa hàng chứ không trừ xu, suất miễn phí reset khi sang màn
 và khi bấm Chơi lại nhưng kho thì không, mua thiếu xu thì không nhận hàng.
 `tests/game.html` chơi hết màn thật bằng solver rồi kiểm sao / xu / mở khoá /
-kỷ lục / chọn màn / quà ngày / chế độ Khó.
+kỷ lục / chọn màn / quà ngày / chế độ Khó. `tests/tutorial.html` kiểm bài hướng
+dẫn: đúng thứ tự ba bước, đèn rọi đúng ống, chặn chạm sai, chạy đúng một lần,
+nút Bỏ qua, và các màn khác thì không hiện.
 
 ## Nguồn dữ liệu level
 
@@ -204,10 +219,12 @@ index.html                 khung tất cả các màn hình
 style.css                  nền động, ống 3D, pháo hoa, Home, lưới màn, popup
 src/save.js                tiến độ, sao, ví xu, kho booster, quà ngày
 src/board.js               luật chơi, dựng hình, âm thanh, hiệu ứng, solver
+src/tutorial.js            bài hướng dẫn ở màn 1
 src/ui.js                  router + Home / Chọn màn / Cửa hàng / Quà / Cài đặt
 scripts/serve.mjs          dev server, không phụ thuộc gì
 tests/boosters.html        50 test cho booster & cửa hàng
-tests/game.html            42 test cho luồng chơi
+tests/game.html            41 test cho luồng chơi
+tests/tutorial.html        28 test cho bài hướng dẫn
 data/levels-classic.js     15.100 màn cổ điển        (832 KB)
 data/levels-hard.js         2.596 màn khó            (181 KB)
 data/par-classic.js        số bước chuẩn, cổ điển     (30 KB)

@@ -1,0 +1,96 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();if(seed)for(const[k,v]of Object.entries(seed))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),300);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+(async function(){
+  let w = await boot();
+
+  head('Màn 1 tự chạy hướng dẫn');
+  $(w,'#btnPlay').click(); await sleep(900);
+  ok(w.BS.tutorial.active(), 'hướng dẫn đang chạy');
+  ok($(w,'#tutor').classList.contains('on'), 'lớp hướng dẫn hiện ra');
+  ok(/cùng màu/.test($(w,'#tutorMsg').textContent), 'câu đầu nói mục tiêu', $(w,'#tutorMsg').textContent);
+  ok(!$(w,'#tutorSpot').classList.contains('on'), 'câu đầu chưa chỉ ống nào');
+
+  head('Bước 2 — chỉ vào ống nguồn');
+  await sleep(2300);
+  ok($(w,'#tutorSpot').classList.contains('on'), 'đèn rọi bật lên');
+  ok($(w,'#tutorHand').classList.contains('on'), 'bàn tay hiện ra');
+  ok(/nhấc bi/.test($(w,'#tutorMsg').textContent), 'hướng dẫn nhấc bi', $(w,'#tutorMsg').textContent);
+  const mv = w.BS.board.nextMove();
+  const spotL = parseFloat($(w,'#tutorSpot').style.left);
+  const tubeL = w.BS.board.tubeRect(mv.from).left - $(w,'#tutor').getBoundingClientRect().left;
+  ok(Math.abs(spotL-(tubeL-6))<1.5, 'đèn rọi đúng ống nguồn', [spotL,tubeL]);
+
+  head('Chặn thao tác sai');
+  const T=()=>$$(w,'#tubes .tube');
+  const wrong = mv.from===0?1:0;
+  T()[wrong].click(); await sleep(120);
+  ok($$(w,'.ball.sel').length===0, 'chạm ống khác thì không nhấc được bi');
+  ok(w.BS.tutorial.active(), 'hướng dẫn vẫn đang ở bước cũ');
+  ok(/nhấc bi/.test($(w,'#tutorMsg').textContent), 'câu hướng dẫn không đổi');
+
+  head('Bước 3 — chỉ vào ống đích');
+  T()[mv.from].click(); await sleep(160);
+  ok($$(w,'.ball.sel').length>0, 'chạm đúng ống thì nhấc được bi');
+  ok(/thả bi/.test($(w,'#tutorMsg').textContent), 'chuyển sang hướng dẫn thả bi', $(w,'#tutorMsg').textContent);
+  const spotL2 = parseFloat($(w,'#tutorSpot').style.left);
+  const tubeL2 = w.BS.board.tubeRect(mv.to).left - $(w,'#tutor').getBoundingClientRect().left;
+  ok(Math.abs(spotL2-(tubeL2-6))<1.5, 'đèn rọi nhảy sang ống đích', [spotL2,tubeL2]);
+
+  head('Đi xong thì hướng dẫn tự tắt và không quay lại');
+  T()[mv.to].click(); await sleep(500);
+  ok(!w.BS.tutorial.active(), 'hướng dẫn đã tắt');
+  ok(!$(w,'#tutor').classList.contains('on'), 'lớp hướng dẫn ẩn đi');
+  ok(w.BS.save.tutorDone(), 'đã ghi nhớ là học xong');
+  ok(w.BS.board.moves()===1, 'nước đi được tính bình thường', w.BS.board.moves());
+
+  head('Vào lại màn 1 thì không hiện nữa');
+  w.BS.board.start('classic',0); await sleep(900);
+  ok(!w.BS.tutorial.active(), 'không chạy lại');
+
+  head('Người đã học rồi thì màn 1 vào thẳng');
+  w = await boot({bsp_tutor:true});
+  $(w,'#btnPlay').click(); await sleep(900);
+  ok(!w.BS.tutorial.active(), 'bỏ qua hướng dẫn');
+  ok(!$(w,'#tutor').classList.contains('on'), 'không có lớp phủ');
+  const T2=$$(w,'#tubes .tube');
+  T2[0].click(); await sleep(120);
+  ok($$(w,'.ball.sel').length>0, 'chạm ống nào cũng được, không bị chặn');
+
+  head('Nút Bỏ qua');
+  w = await boot();
+  $(w,'#btnPlay').click(); await sleep(900);
+  ok(w.BS.tutorial.active(), 'hướng dẫn chạy');
+  $(w,'#tutorSkip').click(); await sleep(120);
+  ok(!w.BS.tutorial.active(), 'bấm Bỏ qua thì dừng');
+  ok(w.BS.save.tutorDone(), 'bỏ qua cũng coi như đã học');
+  $$(w,'#tubes .tube')[1].click(); await sleep(120);
+  ok($$(w,'.ball.sel').length>0, 'sau khi bỏ qua thì hết bị chặn');
+
+  head('Màn khác không có hướng dẫn');
+  w = await boot();
+  w.BS.save.unlock('classic',6);
+  w.BS.board.start('classic',5); await sleep(900);
+  ok(!w.BS.tutorial.active(), 'màn 6 không chạy hướng dẫn');
+  ok(!w.BS.save.tutorDone(), 'và không đánh dấu đã học');
+
+  out();
+})().catch(e=>{L.push('EXCEPTION: '+e.message+'\n'+e.stack);fail++;out();});
+</script>

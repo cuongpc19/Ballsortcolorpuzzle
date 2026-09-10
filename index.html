@@ -104,6 +104,15 @@
       <div id="tubes"></div>
       <div id="balls"></div>
       <div id="fx"></div>
+      <!-- inside the board so the message and the skip button stay clear of
+           the header and the toolbar; the spotlight's shadow is unclipped and
+           still dims the whole page -->
+      <div id="tutor">
+        <i id="tutorSpot"></i>
+        <i id="tutorHand">👆</i>
+        <button id="tutorSkip">Bỏ qua hướng dẫn</button>
+        <p id="tutorMsg"></p>
+      </div>
     </main>
 
     <footer id="toolbar">
@@ -137,15 +146,6 @@
       <div class="praise" id="winPraise">Tuyệt vời!</div>
 
       <div class="reward" id="winReward"><b>🪙</b><span id="winCoins">+10</span></div>
-
-      <div class="stats">
-        <div class="stat"><b id="stMoves">0</b><span>Số bước</span></div>
-        <div class="stat"><b id="stPar">0</b><span>Chuẩn</span></div>
-        <div class="stat"><b id="stTime">0:00</b><span>Thời gian</span></div>
-        <div class="stat"><b id="stBest">–</b><span>Kỷ lục</span></div>
-      </div>
-
-      <div class="newRec" id="newRec">🏆 Kỷ lục mới!</div>
 
       <div class="winRow">
         <button class="btn ghost sq" id="btnHome" title="Về trang chính">🏠</button>
@@ -197,6 +197,7 @@
 <script src="data/par-hard.js"></script>
 <script src="src/save.js"></script>
 <script src="src/board.js"></script>
+<script src="src/tutorial.js"></script>
 <script src="src/ui.js"></script>
 </body>
 </html>

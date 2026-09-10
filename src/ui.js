@@ -339,7 +339,14 @@ if (save.seen()) {
 }
 
 /* The daily card is the reason to come back, so offer it once on arrival -
-   but only offer it, never force it. */
-if (save.daily().ready) setTimeout(openDaily, 700);
+   but only offer it, never force it, and never on top of something else.
+   A first-timer who taps PLAY inside that second is mid-walkthrough, and a
+   reward card over the lesson buries the one thing they need to read. */
+if (save.daily().ready) setTimeout(function () {
+  if (current !== 'home') return;
+  if (BS.tutorial && BS.tutorial.active()) return;
+  if ($$('.overlay.show').length) return;
+  openDaily();
+}, 700);
 
 })();

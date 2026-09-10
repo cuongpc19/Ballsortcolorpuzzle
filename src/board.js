@@ -97,11 +97,6 @@ var el = {
   win:      document.getElementById('winOverlay'),
   winLevel: document.getElementById('winLevel'),
   winPraise:document.getElementById('winPraise'),
-  stMoves:  document.getElementById('stMoves'),
-  stPar:    document.getElementById('stPar'),
-  stTime:   document.getElementById('stTime'),
-  stBest:   document.getElementById('stBest'),
-  newRec:   document.getElementById('newRec'),
   winReward:document.getElementById('winReward'),
   winCoins: document.getElementById('winCoins'),
   sky:      document.getElementById('sky'),
@@ -658,6 +653,7 @@ function loadLevel(mode, index) {
   layout();
   paint({ instant: true });
   dealIn();
+  BS.emit('levelReady', { mode: mode, index: index });
 }
 
 function reloadLevel() { loadLevel(S.mode, S.index); }
@@ -986,6 +982,8 @@ function performMove(from, to, n, record) {
       function () { landFx(to, slot, colour); });
   });
 
+  BS.emit('moved', { from: from, to: to, n: n });
+
   var full = isDone(S.tubes[to]) && S.tubes[to].length;
   setTimeout(function () {
     if (full) { S.combo++; celebrate(to); }
@@ -1107,7 +1105,12 @@ el.tubes.addEventListener('click', function (ev) {
   tapTube(+t.dataset.i);
 });
 
+/* While the level-1 walkthrough is running it decides which tube may be
+   tapped, so a stray tap cannot desync the lesson from the board. */
+var gate = null;
+
 function tapTube(i) {
+  if (gate && !gate(i, S.sel)) { nudge(i); sfx('deny'); return; }
   clearHint();
   var d = S.geo.d;
 
@@ -1122,6 +1125,7 @@ function tapTube(i) {
     sfx('pick', S.tubes[i].length);
     buzz(7);
     paint();
+    BS.emit('picked', i);
     return;
   }
   if (S.sel === i) { S.sel = -1; sfx('ui'); paint(); return; }
@@ -1346,11 +1350,6 @@ function solve(start, cap, nodeCap) {
 
 /* ============================== win flow ============================ */
 
-function mmss(ms) {
-  var t = Math.max(0, Math.round(ms / 1000));
-  return Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2);
-}
-
 function win() {
   duck(3.4);
   sfx('win');
@@ -1361,7 +1360,6 @@ function win() {
   confetti();
   banner('HOÀN THÀNH!', Math.min(52, window.innerWidth * 0.125), 1500);
 
-  var elapsed = Date.now() - S.t0;
   var par = parOf(S.mode, S.index);
   var ref = par || Math.max(1, S.moves);
   var stars = S.moves <= ref * 1.10 ? 3 : S.moves <= ref * 1.45 ? 2 : 1;
@@ -1369,7 +1367,7 @@ function win() {
   var res = save.finish(S.mode, S.index, S.moves, stars);
 
   setTimeout(function () {
-    showWinPanel(stars, par, elapsed, res);
+    showWinPanel(stars, res);
   }, 950);
 }
 
@@ -1377,13 +1375,8 @@ var PRAISE = [[], ['Qua màn rồi!', 'Xong màn!', 'Vượt qua rồi!'],
                   ['Làm tốt lắm!', 'Khá lắm!', 'Ngon lành!'],
                   ['Hoàn hảo!', 'Không chê vào đâu được!', 'Đỉnh cao!']];
 
-function showWinPanel(stars, par, elapsed, res) {
+function showWinPanel(stars, res) {
   el.winLevel.textContent = 'Cấp độ ' + (S.index + 1);
-  el.stMoves.textContent = S.moves;
-  el.stPar.textContent = par || '–';
-  el.stTime.textContent = mmss(elapsed);
-  el.stBest.textContent = res.best || S.moves;
-  el.newRec.classList.toggle('on', !!res.record);
 
   /* The reward line only shows on a first clear - a replay pays nothing and
      saying "+0" would read as a bug. */
@@ -1556,6 +1549,23 @@ BS.board = {
   ready: function () { return !!S.geo; },
   sfx: sfx,
   toast: toast,
+  /** the solver's next move from where the board stands, or null */
+  nextMove: function () {
+    var plain = S.tubes.map(function (t) {
+      return t.map(function (b) { return b.c; });
+    });
+    var path = solve(plain, S.cap, 150000);
+    return path && path.length ? { from: path[0].i, to: path[0].j } : null;
+  },
+  /** screen rectangle of tube #i, for the walkthrough spotlight */
+  tubeRect: function (i) {
+    var t = el.tubes.children[i];
+    return t ? t.getBoundingClientRect() : null;
+  },
+  tubeCount: function () { return S.tubes.length; },
+  moves: function () { return S.moves; },
+  /** restrict which tubes accept a tap; pass null to lift it */
+  setGate: function (fn) { gate = fn; },
   banner: banner,
   fireworks: fireworksShow,
   burst: burst,
