@@ -16,10 +16,10 @@ npm run build:crazy
 It refuses nothing quietly. It must print:
 
 ```
-Ban "crazy": 26 file · 2.36 MB
+Ban "crazy": 27 file · 2.37 MB
   ✓ duoi 20 MB - du dieu kien len trang chu ban mobile
   ✓ duong dan tuong doi
-  ✓ co SDK CrazyGames (1 file)
+  ✓ co SDK CrazyGames (2 file)
   ✓ khong co tests, scripts, Manythings, node_modules, .git
 ```
 
@@ -155,8 +155,8 @@ numbers decide Full Launch.
 
 | metric | good | ours |
 |---|---|---|
-| build size | < 20 MB | **2.36 MB** ✓ |
-| load time | < 10 s | 26 files, no bundler, no fonts to fetch |
+| build size | < 20 MB | **2.37 MB** ✓ |
+| load time | < 10 s | 27 files, no bundler, no fonts to fetch |
 | reached gameplay | 80 %+ | one tap from Home |
 | day-1 retention | 10–15 % | localStorage + Progress Save |
 | avg session | 10+ min | — |

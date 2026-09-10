@@ -19,3 +19,6 @@ Thumbs.db
 
 # The CrazyGames bundle is generated: scripts/build-crazy.mjs
 /dist/
+
+# Firebase deploy cache
+/.firebase/
