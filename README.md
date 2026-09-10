@@ -5,7 +5,70 @@ Bản dựng lại bằng HTML/CSS/JS thuần của game **Ball Sort Puzzle – 
 
 ## Chạy
 
-Mở thẳng `index.html` bằng trình duyệt (không cần server, không cần cài gì).
+```bash
+npm run dev          # http://localhost:5180
+```
+
+Không cần `npm install` — dev server là một file Node thuần, không phụ thuộc gì
+([scripts/serve.mjs](scripts/serve.mjs)). Nó in luôn địa chỉ LAN để mở trên điện
+thoại; trên Windows chạy `mo-firewall.bat` một lần để mở cổng.
+
+Cũng mở thẳng `index.html` bằng trình duyệt được (không có bước build nào), chỉ
+là bộ test cần chạy qua http.
+
+## Các màn hình
+
+| Màn | Có gì |
+|---|---|
+| **Home** | logo, thẻ tiến độ (đang ở màn nào, đã qua bao nhiêu, tổng sao), nút CHƠI, 4 nút phụ, đổi chế độ, ví xu |
+| **Chọn màn** | lưới 60 ô mỗi trang, sao đã ăn trên từng ô, ô kế tiếp nổi bật, ô chưa tới thì khoá, ô nhảy nhanh tới màn bất kỳ |
+| **Chơi** | bàn cờ, 4 booster, ví xu, nút tắt tiếng |
+| **Hoàn thành màn** | sao, thưởng xu, số bước / chuẩn / thời gian / kỷ lục |
+| **Quà mỗi ngày** | chuỗi 3 ngày, 100 → 150 → 250 xu, nhỡ một ngày là chuỗi reset |
+| **Cửa hàng** | mua booster bằng xu |
+| **Cài đặt** | âm thanh, nhạc nền, xoá tiến độ |
+
+## Booster — làm đúng theo APK gốc
+
+Metadata IL2CPP của bản gốc nói rõ booster của họ hoạt động thế nào, và bản này
+làm theo đúng hình dạng đó:
+
+| Trong APK | Nghĩa | Ở đây |
+|---|---|---|
+| `UndoNumber`, `AddUndo`, `ReduceUndo` | hoàn tác là **số lượng sở hữu** | kho `undo`, khởi điểm 5 |
+| `TubeCount`, `TubeBoosterCount` | ống phụ cũng là số lượng sở hữu | kho `tube`, khởi điểm 2 |
+| `FreeAddTubeNum` + `UseFreeCount` | …cộng **suất miễn phí reset mỗi màn** | 1 ống miễn phí mỗi màn |
+| `ClearHintNum`, `_maxHintLimit` | gợi ý có hạn mức mỗi màn | 1 gợi ý miễn phí mỗi màn, rồi kho 3 |
+| `EventShopUndoCoinClick` / `…RVClick` | hết thì mua bằng **xu** hoặc xem quảng cáo | không có quảng cáo nên chỉ còn đường xu |
+
+Nút booster đổi mặt theo trạng thái: còn suất miễn phí thì hiện **FREE** (xanh
+lá), còn hàng trong kho thì hiện **số lượng**, hết sạch thì hiện **giá** (vàng)
+và bấm vào sẽ mở cửa hàng chứ không âm thầm trừ xu.
+
+Con số cụ thể (5/2/3, giá 30/60/45) là của bản này — bản gốc đọc từ remote config
+(`DynamicUndoCount`, `DynamicAddTubeScore`…) nên không nằm trong APK.
+
+## Kinh tế xu
+
+- Thắng lần đầu một màn: **10 xu**, cộng **5 xu mỗi sao** trên sao thứ nhất → 10 / 15 / 20.
+- Chơi lại màn cũ **không trả xu** (vẫn ăn sao và kỷ lục) — tránh biến nó thành máy in xu.
+- Quà ngày: **100 / 150 / 250** xu.
+- Ví khởi điểm: **300** xu.
+
+## Kiểm thử
+
+```bash
+npm run dev
+# rồi mở:
+#   http://localhost:5180/tests/boosters.html   (50 test)
+#   http://localhost:5180/tests/game.html       (42 test)
+```
+
+`tests/boosters.html` bám sát hợp đồng booster ở trên: suất miễn phí không trừ
+kho, hết kho thì mở cửa hàng chứ không trừ xu, suất miễn phí reset khi sang màn
+và khi bấm Chơi lại nhưng kho thì không, mua thiếu xu thì không nhận hàng.
+`tests/game.html` chơi hết màn thật bằng solver rồi kiểm sao / xu / mở khoá /
+kỷ lục / chọn màn / quà ngày / chế độ Khó.
 
 ## Nguồn dữ liệu level
 
@@ -130,17 +193,21 @@ này: quầng tia sáng xoay chậm phía sau, viền bo lớn, tiêu đề ch�
 
 ## Chức năng
 
-- **Hoàn tác** (phím `Z`), **Chơi lại** (`R`), **Gợi ý** (`H`), **Tắt tiếng** (`M`), `Esc` bỏ chọn.
-- **Thêm ống**: tối đa 2 ống phụ mỗi màn.
+- **Hoàn tác** (phím `Z`), **Chơi lại** (`R`), **Gợi ý** (`H`), **Tắt tiếng** (`M`), `Esc` đóng bảng / về Home.
 - **Gợi ý** dùng solver DFS chạy ngay trong trình duyệt (đã kiểm thử 900 màn ngẫu nhiên, giải được 100%, chậm nhất ~70 ms).
-- Chọn màn bất kỳ qua nút ☰; tiến độ lưu trong `localStorage`.
+- Tiến độ, sao, kỷ lục, ví xu và kho booster lưu trong `localStorage` (khoá `bsp_*`).
 
 ## Cấu trúc
 
 ```
-index.html                 giao diện
-style.css                  giao diện tối, ống 3D, pháo hoa, bảng kết quả
-game.js                    luật chơi, dựng hình, âm thanh, hiệu ứng, solver
+index.html                 khung tất cả các màn hình
+style.css                  nền động, ống 3D, pháo hoa, Home, lưới màn, popup
+src/save.js                tiến độ, sao, ví xu, kho booster, quà ngày
+src/board.js               luật chơi, dựng hình, âm thanh, hiệu ứng, solver
+src/ui.js                  router + Home / Chọn màn / Cửa hàng / Quà / Cài đặt
+scripts/serve.mjs          dev server, không phụ thuộc gì
+tests/boosters.html        50 test cho booster & cửa hàng
+tests/game.html            42 test cho luồng chơi
 data/levels-classic.js     15.100 màn cổ điển        (832 KB)
 data/levels-hard.js         2.596 màn khó            (181 KB)
 data/par-classic.js        số bước chuẩn, cổ điển     (30 KB)

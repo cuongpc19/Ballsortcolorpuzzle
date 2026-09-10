@@ -1,0 +1,219 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script src="../data/levels-classic.js"></script>
+<script>
+const L = []; let pass = 0, fail = 0;
+const out = () => document.getElementById('o').textContent =
+  L.join('\n') + `\n\n${fail ? '✗ FAIL' : '✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c, label, extra) {
+  if (c) { pass++; L.push('  ✓ ' + label); }
+  else { fail++; L.push('  ✗ ' + label + (extra !== undefined ? '   got: ' + JSON.stringify(extra) : '')); }
+}
+function head(t) { L.push('\n── ' + t); }
+
+const fr = document.createElement('iframe');
+fr.width = 440; fr.height = 926;
+fr.style.cssText = 'position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const $ = (w, s) => w.document.querySelector(s);
+const $$ = (w, s) => [...w.document.querySelectorAll(s)];
+
+function boot() {
+  return new Promise(resolve => {
+    fr.onload = () => {
+      const w = fr.contentWindow;
+      try { w.localStorage.clear(); } catch (e) {}
+      fr.onload = () => setTimeout(() => resolve(fr.contentWindow), 300);
+      w.location.reload();
+    };
+    fr.src = '../index.html?' + Math.random();
+  });
+}
+
+/* a tiny solver so the harness can actually finish a level */
+const CH = '0123456789abc';
+function decode(raw) { return raw.split('-').map(s => [...s].map(c => CH.indexOf(c))); }
+function solve(start, cap, nodeCap) {
+  const seen = Object.create(null); let nodes = 0; const path = [];
+  const key = st => st.map(t => t.join(',')).sort().join('|');
+  const finished = st => st.every(t => !t.length || (t.length === cap && t.every(x => x === t[0])));
+  function dfs(st) {
+    if (++nodes > nodeCap) return false;
+    if (finished(st)) return true;
+    const k = key(st); if (seen[k]) return false; seen[k] = 1;
+    const moves = [];
+    for (let i = 0; i < st.length; i++) {
+      const a = st[i]; if (!a.length) continue;
+      const c = a[a.length - 1]; let run = 1;
+      while (run < a.length && a[a.length - 1 - run] === c) run++;
+      if (run === a.length && a.length === cap) continue;
+      for (let j = 0; j < st.length; j++) {
+        if (i === j) continue;
+        const b = st[j];
+        if (b.length >= cap) continue;
+        if (b.length && b[b.length - 1] !== c) continue;
+        if (!b.length && run === a.length) continue;
+        const cnt = Math.min(run, cap - b.length);
+        let sc = 0;
+        if (b.length) { const pure = b.every(x => x === c); if (pure) sc += 10; if (pure && b.length + cnt === cap) sc += 30; }
+        else sc -= 6;
+        if (cnt === run) sc += 4;
+        if (run === a.length) sc += 3;
+        moves.push({ i, j, cnt, s: sc });
+      }
+    }
+    moves.sort((x, y) => y.s - x.s);
+    for (const mv of moves) {
+      const st2 = st.map(t => t.slice());
+      const taken = st2[mv.i].splice(st2[mv.i].length - mv.cnt, mv.cnt);
+      st2[mv.j].push(...taken);
+      path.push(mv);
+      if (dfs(st2)) return true;
+      path.pop();
+    }
+    return false;
+  }
+  return dfs(start.map(t => t.slice())) ? path : null;
+}
+
+/** play level `idx` (0-based) to the end inside the iframe */
+async function playLevel(w, idx, waste) {
+  w.BS.board.start('classic', idx); await sleep(300);
+  const path = solve(decode(window.LEVELS_CLASSIC[idx]), 4, 300000);
+  const T = () => $$(w, '#tubes .tube');
+  if (waste) {   /* burn moves so the star rating drops */
+    for (let n = 0; n < waste; n++) {
+      const t = T();
+      let done = false;
+      for (let i = 0; i < t.length && !done; i++) {
+        for (let j = 0; j < t.length && !done; j++) {
+          if (i === j) continue;
+          t[i].click(); await sleep(14); t[j].click(); await sleep(90);
+          if (+$(w, '#moveNum').textContent > n) done = true;
+          else { t[j].click(); await sleep(10); }
+        }
+      }
+    }
+    // re-solve from the current position
+    return playRest(w);
+  }
+  for (const m of path) {
+    T()[m.i].click(); await sleep(14);
+    T()[m.j].click(); await sleep(80);
+  }
+  await sleep(2600);
+}
+async function playRest(w) {
+  for (let guard = 0; guard < 200; guard++) {
+    if ($(w, '#winOverlay').classList.contains('show')) return;
+    $(w, '#btnHint').click(); await sleep(50);
+    const T = $$(w, '#tubes .tube');
+    const f = T.findIndex(t => t.classList.contains('hintFrom'));
+    const g = T.findIndex(t => t.classList.contains('hintTo'));
+    if (f < 0 || g < 0) break;
+    T[f].click(); await sleep(14); T[g].click(); await sleep(90);
+  }
+  await sleep(2600);
+}
+
+(async function run() {
+  let w = await boot();
+
+  /* ═══════════════════════ thắng màn & phần thưởng ═══════════════════════ */
+  head('Thắng màn — sao, xu, mở khoá');
+  const coins0 = w.BS.save.coins();
+  await playLevel(w, 0);
+  ok($(w, '#winOverlay').classList.contains('show'), 'hiện bảng hoàn thành');
+  const par1 = w.BS.board.par('classic', 0);
+  ok($(w, '#stPar').textContent === String(par1), 'ô "Chuẩn" = số bước gốc ' + par1, $(w, '#stPar').textContent);
+  const stars1 = $$(w, '.star.on').length;
+  ok(stars1 === 3, 'đi tối ưu → 3 sao', stars1);
+  ok(w.BS.save.stars('classic', 0) === 3, 'sao được lưu', w.BS.save.stars('classic', 0));
+  ok(w.BS.save.coins() === coins0 + 20, 'thưởng 20 xu cho 3 sao', w.BS.save.coins() - coins0);
+  ok($(w, '#winReward').classList.contains('on'), 'dòng thưởng hiện ra');
+  ok($(w, '#winCoins').textContent === '+20', 'ghi +20', $(w, '#winCoins').textContent);
+  ok(w.BS.save.max('classic') === 1, 'mở khoá màn 2', w.BS.save.max('classic'));
+  ok(w.BS.save.best('classic', 0) === +$(w, '#stMoves').textContent, 'kỷ lục = số bước vừa đi');
+  ok($(w, '#newRec').classList.contains('on'), 'lần đầu luôn là kỷ lục mới');
+
+  head('Chơi lại màn cũ thì KHÔNG trả xu nữa');
+  const coins1 = w.BS.save.coins();
+  await playLevel(w, 0);
+  ok(w.BS.save.coins() === coins1, 'ví không đổi', w.BS.save.coins() - coins1);
+  ok(!$(w, '#winReward').classList.contains('on'), 'không hiện dòng thưởng');
+
+  head('Nút "Màn tiếp"');
+  $(w, '#btnNext').click(); await sleep(320);
+  ok($(w, '#levelNum').textContent === '2', 'sang cấp độ 2', $(w, '#levelNum').textContent);
+  ok(!$(w, '#winOverlay').classList.contains('show'), 'bảng đã đóng');
+  ok(w.BS.save.level('classic') === 1, 'tiến độ đã lưu', w.BS.save.level('classic'));
+
+  /* ═══════════════════════════ chọn màn ═══════════════════════════ */
+  head('Màn hình Chọn màn');
+  $(w, '#btnHome').click === undefined;
+  $$(w, '[data-back]')[0].click(); await sleep(60);   // từ game về home
+  $(w, '#btnLevels').click(); await sleep(200);
+  ok($(w, '#screenLevels').classList.contains('on'), 'mở màn chọn màn');
+  const tiles = $$(w, '.lvTile');
+  ok(tiles.length === 60, 'mỗi trang 60 ô', tiles.length);
+  ok(tiles[0].classList.contains('done'), 'màn 1 đã xong → tô xanh');
+  ok(tiles[0].querySelector('.st').textContent.startsWith('★★★'), 'màn 1 hiện 3 sao');
+  ok(tiles[1].classList.contains('next'), 'màn 2 là màn kế tiếp');
+  ok(tiles[2].classList.contains('locked'), 'màn 3 còn khoá');
+  tiles[2].click(); await sleep(120);
+  ok($(w, '#screenLevels').classList.contains('on'), 'bấm ô khoá thì không vào được');
+  tiles[1].click(); await sleep(300);
+  ok($(w, '#screenGame').classList.contains('on') && $(w, '#levelNum').textContent === '2',
+     'bấm ô mở khoá thì vào đúng màn');
+
+  head('Nhảy tới màn');
+  $$(w, '[data-back]')[0].click(); await sleep(60);
+  $(w, '#btnLevels').click(); await sleep(160);
+  $(w, '#lvJump').value = '900';
+  $(w, '#btnJump').click(); await sleep(140);
+  ok($(w, '#screenLevels').classList.contains('on'), 'nhảy tới màn còn khoá thì bị chặn');
+  w.BS.save.unlock('classic', 900);
+  $(w, '#lvJump').value = '900';
+  $(w, '#btnJump').click(); await sleep(320);
+  ok($(w, '#levelNum').textContent === '900', 'đã mở khoá thì nhảy được', $(w, '#levelNum').textContent);
+
+  /* ═══════════════════════════ quà ngày ═══════════════════════════ */
+  head('Quà mỗi ngày');
+  $$(w, '[data-back]')[0].click(); await sleep(80);
+  $(w, '#btnDaily').click(); await sleep(120);
+  ok($(w, '#dailyOverlay').classList.contains('show'), 'mở thẻ quà');
+  ok($$(w, '.day').length === 3, 'có 3 ngày', $$(w, '.day').length);
+  ok($$(w, '.day')[0].classList.contains('now'), 'ngày 1 đang sẵn sàng');
+  const c2 = w.BS.save.coins();
+  $(w, '#btnClaim').click(); await sleep(200);
+  ok(w.BS.save.coins() === c2 + 100, 'nhận 100 xu ngày 1', w.BS.save.coins() - c2);
+  ok($(w, '#btnClaim').disabled, 'nhận rồi thì nút khoá lại');
+  ok($$(w, '.day')[0].classList.contains('taken'), 'ngày 1 đánh dấu đã nhận');
+  const c3 = w.BS.save.coins();
+  $(w, '#btnClaim').click(); await sleep(120);
+  ok(w.BS.save.coins() === c3, 'bấm lại không nhận thêm', w.BS.save.coins() - c3);
+  $$(w, '#dailyOverlay [data-close]')[0].click(); await sleep(80);
+
+  /* ═════════════════════════ home hiển thị đúng ═════════════════════════ */
+  head('Màn Home cập nhật đúng');
+  ok($(w, '#screenHome').classList.contains('on'), 'đang ở Home');
+  ok($(w, '#homeLevel').textContent === 'Cấp độ 900', 'hiện đúng cấp độ đang chơi', $(w, '#homeLevel').textContent);
+  ok(/^1 \/ 15\.100/.test($(w, '#homeCleared').textContent), 'đếm số màn đã qua', $(w, '#homeCleared').textContent);
+  ok($(w, '#homeStars').textContent === '★ 3', 'tổng sao', $(w, '#homeStars').textContent);
+  ok(!$(w, '#dailyDot').classList.contains('on'), 'nhận quà rồi thì tắt chấm đỏ');
+  ok($$(w, '.coinNum')[0].textContent === w.BS.save.coins().toLocaleString('vi-VN'), 'ví khớp');
+
+  /* ═════════════════════════ chế độ Khó ═════════════════════════ */
+  head('Chế độ Khó');
+  $$(w, '#homeMode .mode')[1].click(); await sleep(120);
+  ok($(w, '#homeLevel').textContent === 'Cấp độ 1', 'chế độ Khó bắt đầu từ màn 1');
+  $(w, '#btnPlay').click(); await sleep(340);
+  ok($(w, '#screenGame').classList.contains('on'), 'vào được chế độ Khó');
+  ok(w.BS.board.mode() === 'hard', 'bàn cờ đang ở chế độ hard', w.BS.board.mode());
+  ok($$(w, '#balls .ball').length === 32, 'màn khó 1: 4 màu × 8 bi = 32', $$(w, '#balls .ball').length);
+
+  out(); window.__done = true;
+})().catch(e => { L.push('EXCEPTION: ' + e.message + '\n' + e.stack); fail++; out(); window.__done = true; });
+</script>

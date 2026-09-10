@@ -1,0 +1,11 @@
+{
+  "name": "ball-sort-color-puzzle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ball Sort Puzzle - Color Game, rebuilt as a static HTML/CSS/JS game using the original level design",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs"
+  }
+}

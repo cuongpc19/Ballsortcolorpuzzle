@@ -5,6 +5,10 @@
 (function () {
 'use strict';
 
+var BS = window.BS;
+var save = BS.save;
+var ECON = BS.ECON;
+
 /* ============================ level data ============================ */
 
 var CH = '0123456789abc';
@@ -75,7 +79,8 @@ function ballBackground(ci) {
 var S = {
   mode: 'classic', index: 0, depth: 4, cap: 4,
   tubes: [], sel: -1, moves: 0, history: [],
-  extra: 0, extraMax: 2, won: false, seq: 0, geo: null, combo: 0,
+  extra: 0, won: false, seq: 0, geo: null, combo: 0,
+  freeUsed: { undo: 0, tube: 0, hint: 0 },  /* the per-level allowance */
   sinceClear: 0,      /* moves made since the last tube was finished */
   lastClear: 0,       /* timestamp of that moment                    */
   t0: 0               /* when the level started                      */
@@ -88,7 +93,6 @@ var el = {
   fx:       document.getElementById('fx'),
   levelNum: document.getElementById('levelNum'),
   moveNum:  document.getElementById('moveNum'),
-  addLeft:  document.getElementById('addLeft'),
   toast:    document.getElementById('toast'),
   win:      document.getElementById('winOverlay'),
   winLevel: document.getElementById('winLevel'),
@@ -98,14 +102,17 @@ var el = {
   stTime:   document.getElementById('stTime'),
   stBest:   document.getElementById('stBest'),
   newRec:   document.getElementById('newRec'),
-  menu:     document.getElementById('menuOverlay'),
-  menuSub:  document.getElementById('menuSub'),
-  quick:    document.getElementById('quickList'),
-  input:    document.getElementById('levelInput'),
+  winReward:document.getElementById('winReward'),
+  winCoins: document.getElementById('winCoins'),
   sky:      document.getElementById('sky'),
   sound:    document.getElementById('btnSound'),
   optSfx:   document.getElementById('optSfx'),
-  optMusic: document.getElementById('optMusic')
+  optMusic: document.getElementById('optMusic'),
+  btnUndo:  document.getElementById('btnUndo'),
+  btnAdd:   document.getElementById('btnAdd'),
+  btnHint:  document.getElementById('btnHint'),
+  priceTube:document.getElementById('priceTube'),
+  priceHint:document.getElementById('priceHint')
 };
 
 var REDUCED = !!(window.matchMedia &&
@@ -113,24 +120,10 @@ var REDUCED = !!(window.matchMedia &&
 
 /* ============================ preferences =========================== */
 
-var SKEY = 'ballsort.progress.v1';
-
-function loadProgress() {
-  try { return JSON.parse(localStorage.getItem(SKEY)) || {}; }
-  catch (e) { return {}; }
-}
-function saveProgress(p) {
-  try { localStorage.setItem(SKEY, JSON.stringify(p)); } catch (e) {}
-}
 function currentOf(mode) {
-  var v = loadProgress()[mode] | 0;
-  return Math.min(Math.max(v, 0), PACKS[mode].data.length - 1);
+  return Math.min(Math.max(save.level(mode), 0), PACKS[mode].data.length - 1);
 }
-function setCurrent(mode, idx) {
-  var p = loadProgress();
-  p[mode] = idx;
-  saveProgress(p);
-}
+function setCurrent(mode, idx) { save.setLevel(mode, idx); }
 
 /* ========================= audio: engine ============================ */
 /* everything is synthesised - no audio files needed                    */
@@ -287,6 +280,12 @@ var SFX = {
                  vol: 0.05, q: 3, at: 0.12 + Math.random() * 0.5 });
     }
   },
+  /* coins dropping into the wallet */
+  coin: function () {
+    [0, 0.07, 0.14].forEach(function (t, k) {
+      tone({ f: 1180 + k * 220, dur: 0.11, type: 'triangle', vol: 0.13, at: t, echo: 0.25 });
+    });
+  },
   /* one star landing in the level-complete popup */
   star: function (i) {
     tone({ f: midi(76 + (i || 0) * 4), dur: 0.30, type: 'triangle', vol: 0.17, echo: 0.35 });
@@ -429,24 +428,19 @@ function duck(seconds) {
 
 /* ------------------------- audio preferences ------------------------ */
 
-function applyAudioPrefs(save) {
+function applyAudioPrefs(persist) {
   el.optSfx.checked = AU.sfxOn;
   el.optMusic.checked = AU.musicOn;
   el.sound.textContent = (AU.sfxOn || AU.musicOn) ? '🔊' : '🔇';
   el.sound.classList.toggle('off', !AU.sfxOn && !AU.musicOn);
   if (AU.ready) AU.sfxBus.gain.value = AU.sfxOn ? 1 : 0;
   if (AU.musicOn) musicStart(); else musicStop();
-  if (save) {
-    var p = loadProgress();
-    p.sfx = AU.sfxOn; p.music = AU.musicOn;
-    saveProgress(p);
-  }
+  if (persist) save.setAudio(AU.sfxOn, AU.musicOn);
 }
 
 (function readAudioPrefs() {
-  var p = loadProgress();
-  if (p.sfx === false) AU.sfxOn = false;
-  if (p.music === false) AU.musicOn = false;
+  AU.sfxOn = save.sfxOn();
+  AU.musicOn = save.musicOn();
 })();
 
 /* =========================== visual fx ============================== */
@@ -647,9 +641,11 @@ function loadLevel(mode, index) {
   S.moves = 0;
   S.history = [];
   S.extra = 0;
-  S.extraMax = 2;
   S.won = false;
   S.combo = 0;
+  /* `FreeAddTubeNum` / `UseFreeCount` in the original: the free go resets
+     with the level, the bag does not. */
+  S.freeUsed = { undo: 0, tube: 0, hint: 0 };
   S.sinceClear = 0;
   S.lastClear = Date.now();
   S.t0 = Date.now();
@@ -859,11 +855,7 @@ function paint(opts) {
 
   el.levelNum.textContent = S.index + 1;
   el.moveNum.textContent = S.moves;
-  var leftAdds = S.extraMax - S.extra;
-  el.addLeft.textContent = leftAdds;
-  el.addLeft.style.display = leftAdds > 0 ? '' : 'none';
-  document.getElementById('btnUndo').disabled = !S.history.length;
-  document.getElementById('btnAdd').disabled  = leftAdds <= 0;
+  refreshBoosters();
 }
 
 /* ---------------------- the flight of a ball ------------------------ */
@@ -1153,10 +1145,68 @@ function nudge(i) {
   buzz([8, 30, 8]);
 }
 
+/* ============================= boosters ============================ */
+/* Same shape as the original APK: a free allowance that resets every level,
+   then the bag, and when the bag is empty the button turns into a price. */
+
+function freeLeft(id) {
+  return Math.max(0, (ECON.FREE_PER_LEVEL[id] | 0) - (S.freeUsed[id] | 0));
+}
+
+/** what pressing this booster would cost right now */
+function boosterState(id) {
+  if (freeLeft(id) > 0) return { kind: 'free', n: freeLeft(id) };
+  if (save.own(id) > 0) return { kind: 'own', n: save.own(id) };
+  var pack = null;
+  ECON.PACKS.forEach(function (q) { if (q.id === id) pack = q; });
+  return { kind: 'buy', n: 0, price: pack ? pack.price : 0 };
+}
+
+/**
+ * Spend one use. Returns true if the booster may fire. When the bag is empty
+ * this opens the shop instead and returns false.
+ */
+function takeBooster(id) {
+  if (freeLeft(id) > 0) { S.freeUsed[id]++; refreshBoosters(); return true; }
+  if (save.useBooster(id)) { refreshBoosters(); return true; }
+  sfx('deny');
+  toast('Hết ' + ({ undo: 'lượt hoàn tác', tube: 'ống phụ', hint: 'gợi ý' }[id]) +
+        ' — ghé cửa hàng nhé');
+  BS.emit('needShop', id);
+  return false;
+}
+
+/** paint the three booster buttons from the bag */
+function refreshBoosters() {
+  [['undo', el.btnUndo, null],
+   ['tube', el.btnAdd, el.priceTube],
+   ['hint', el.btnHint, el.priceHint]].forEach(function (row) {
+    var id = row[0], btn = row[1], tag = row[2];
+    if (!btn) return;
+    var st = boosterState(id);
+    var badge = btn.querySelector('.price');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'price';
+      btn.appendChild(badge);
+    }
+    btn.classList.toggle('free', st.kind === 'free');
+    btn.classList.toggle('buy', st.kind === 'buy');
+    if (st.kind === 'free')      badge.textContent = 'FREE';
+    else if (st.kind === 'own')  badge.textContent = st.n;
+    else                         badge.textContent = '🪙' + st.price;
+  });
+  el.btnUndo.disabled = !S.history.length;
+}
+
+BS.on('bag', refreshBoosters);
+BS.on('coins', function () { if (S.geo) refreshBoosters(); });
+
 /* ============================== actions ============================= */
 
 function undo() {
   if (!S.history.length) return;
+  if (!takeBooster('undo')) return;
   var m = S.history.pop();
   S.moves = Math.max(0, S.moves - 1);
   S.won = false;
@@ -1167,7 +1217,8 @@ function undo() {
 }
 
 function addTube() {
-  if (S.extra >= S.extraMax) return;
+  if (S.tubes.length >= 16) { toast('Nhiều ống quá rồi!'); return; }
+  if (!takeBooster('tube')) return;
   S.extra++;
   S.tubes.push([]);
   S.sel = -1;
@@ -1200,11 +1251,19 @@ function clearHint() {
 function hint() {
   clearHint();
   if (S.won) return;
+  if (!takeBooster('hint')) return;
   var plain = S.tubes.map(function (t) {
     return t.map(function (b) { return b.c; });
   });
   var path = solve(plain, S.cap, 150000);
-  if (!path) { toast('Bế tắc rồi - hãy hoàn tác hoặc thêm ống'); sfx('deny'); return; }
+  if (!path) {
+    /* nothing to point at - give the charge back */
+    if (S.freeUsed.hint > 0) S.freeUsed.hint--; else save.addBooster('hint', 1);
+    refreshBoosters();
+    toast('Bế tắc rồi - hãy hoàn tác hoặc thêm ống');
+    sfx('deny');
+    return;
+  }
   var m = path[0];
   S.sel = -1;
   paint();
@@ -1307,16 +1366,10 @@ function win() {
   var ref = par || Math.max(1, S.moves);
   var stars = S.moves <= ref * 1.10 ? 3 : S.moves <= ref * 1.45 ? 2 : 1;
 
-  var p = loadProgress();
-  if (S.index + 1 > (p[S.mode + '.max'] | 0)) p[S.mode + '.max'] = S.index + 1;
-  var key = 'b.' + S.mode + '.' + S.index;
-  var prev = p[key] | 0;
-  var record = !prev || S.moves < prev;
-  if (record) p[key] = S.moves;
-  saveProgress(p);
+  var res = save.finish(S.mode, S.index, S.moves, stars);
 
   setTimeout(function () {
-    showWinPanel(stars, par, elapsed, record ? S.moves : prev, record);
+    showWinPanel(stars, par, elapsed, res);
   }, 950);
 }
 
@@ -1324,13 +1377,18 @@ var PRAISE = [[], ['Qua màn rồi!', 'Xong màn!', 'Vượt qua rồi!'],
                   ['Làm tốt lắm!', 'Khá lắm!', 'Ngon lành!'],
                   ['Hoàn hảo!', 'Không chê vào đâu được!', 'Đỉnh cao!']];
 
-function showWinPanel(stars, par, elapsed, best, record) {
+function showWinPanel(stars, par, elapsed, res) {
   el.winLevel.textContent = 'Cấp độ ' + (S.index + 1);
   el.stMoves.textContent = S.moves;
   el.stPar.textContent = par || '–';
   el.stTime.textContent = mmss(elapsed);
-  el.stBest.textContent = best || S.moves;
-  el.newRec.classList.toggle('on', !!record);
+  el.stBest.textContent = res.best || S.moves;
+  el.newRec.classList.toggle('on', !!res.record);
+
+  /* The reward line only shows on a first clear - a replay pays nothing and
+     saying "+0" would read as a bug. */
+  el.winReward.classList.toggle('on', res.coins > 0);
+  el.winCoins.textContent = '+' + res.coins;
 
   var st = el.win.querySelectorAll('.star');
   var i;
@@ -1353,6 +1411,11 @@ function showWinPanel(stars, par, elapsed, best, record) {
   }
   setTimeout(function () {
     el.winPraise.classList.add('on');
+    if (res.coins > 0) {
+      el.winReward.classList.add('pop');
+      sfx('coin');
+      BS.emit('coinFly', el.winReward);
+    }
     if (stars === 3) { fireworksShow(4, 220); banner('HOÀN HẢO!', 40, 1400); }
   }, 260 + stars * 260);
 }
@@ -1389,55 +1452,12 @@ function confetti() {
 
 function nextLevel() {
   el.win.classList.remove('show');
-  var i = Math.min(S.index + 1, PACKS[S.mode].data.length - 1);
+  var last = PACKS[S.mode].data.length - 1;
+  if (S.index >= last) { toast('Bạn đã phá đảo chế độ này!'); BS.emit('goHome'); return; }
+  var i = S.index + 1;
   setCurrent(S.mode, i);
   sfx('ui');
   loadLevel(S.mode, i);
-}
-
-/* ============================== menu =============================== */
-
-function openMenu() {
-  var pack = PACKS[S.mode];
-  el.menuSub.textContent = pack.name + ' · ' +
-                           pack.data.length.toLocaleString('vi-VN') + ' màn';
-  el.input.value = S.index + 1;
-  el.input.max = pack.data.length;
-
-  var maxDone = loadProgress()[S.mode + '.max'] | 0;
-  var marks = [1, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 15000, maxDone + 1];
-  var seen = {}, out = [];
-  marks.forEach(function (m) {
-    if (m >= 1 && m <= pack.data.length && !seen[m]) { seen[m] = 1; out.push(m); }
-  });
-  out.sort(function (a, b) { return a - b; });
-  el.quick.innerHTML = '';
-  out.forEach(function (m) {
-    var b = document.createElement('button');
-    b.textContent = m.toLocaleString('vi-VN');
-    if (m === S.index + 1) b.className = 'cur';
-    b.onclick = function () { jumpTo(m); };
-    el.quick.appendChild(b);
-  });
-  sfx('ui');
-  el.menu.classList.add('show');
-}
-
-function jumpTo(num) {
-  var i = Math.min(Math.max(1, num | 0), PACKS[S.mode].data.length) - 1;
-  setCurrent(S.mode, i);
-  el.menu.classList.remove('show');
-  loadLevel(S.mode, i);
-}
-
-function switchMode(mode) {
-  if (mode === S.mode) return;
-  document.querySelectorAll('.mode').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.mode === mode);
-  });
-  el.win.classList.remove('show');
-  sfx('ui');
-  loadLevel(mode, currentOf(mode));
 }
 
 /* ============================== toast =============================== */
@@ -1464,20 +1484,9 @@ document.getElementById('btnNext').onclick    = nextLevel;
 document.getElementById('btnReplay').onclick  = function () {
   el.win.classList.remove('show'); sfx('ui'); reloadLevel();
 };
-document.getElementById('btnMenu').onclick      = openMenu;
-document.getElementById('btnCloseMenu').onclick = function () {
-  sfx('ui'); el.menu.classList.remove('show');
+document.getElementById('btnHome').onclick = function () {
+  el.win.classList.remove('show'); sfx('ui'); BS.emit('goHome');
 };
-document.getElementById('btnJump').onclick = function () { jumpTo(+el.input.value); };
-el.input.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') jumpTo(+el.input.value);
-});
-document.querySelectorAll('.mode').forEach(function (b) {
-  b.onclick = function () { switchMode(b.dataset.mode); };
-});
-el.menu.addEventListener('click', function (e) {
-  if (e.target === el.menu) el.menu.classList.remove('show');
-});
 
 el.sound.onclick = function () {
   var anyOn = AU.sfxOn || AU.musicOn;
@@ -1524,15 +1533,42 @@ window.addEventListener('resize', function () {
   rTimer = setTimeout(function () { layout(); paint({ instant: true }); }, 80);
 });
 
-/* ============================== start ============================== */
+/* ============================ public api =========================== */
 
-if (!PACKS.classic.data.length) {
-  document.body.innerHTML =
-    '<p style="padding:24px;font:14px sans-serif;color:#ddd">' +
-    'Không nạp được dữ liệu màn chơi (thư mục <code>data/</code>).</p>';
-} else {
-  applyAudioPrefs(false);
-  loadLevel('classic', currentOf('classic'));
-}
+applyAudioPrefs(false);
+
+BS.board = {
+  /** how many levels a mode has */
+  count: function (mode) { return PACKS[mode].data.length; },
+  name: function (mode) { return PACKS[mode].name; },
+  par: parOf,
+  /** open a level; `index` is 0-based */
+  start: function (mode, index) {
+    index = Math.min(Math.max(0, index | 0), PACKS[mode].data.length - 1);
+    setCurrent(mode, index);
+    el.win.classList.remove('show');
+    loadLevel(mode, index);
+  },
+  /** the board only knows its size once its screen is actually visible */
+  relayout: function () { if (S.geo) { layout(); paint({ instant: true }); } },
+  mode: function () { return S.mode; },
+  index: function () { return S.index; },
+  ready: function () { return !!S.geo; },
+  sfx: sfx,
+  toast: toast,
+  banner: banner,
+  fireworks: fireworksShow,
+  burst: burst,
+  audio: {
+    resume: resumeAudio,
+    apply: applyAudioPrefs,
+    get sfxOn() { return AU.sfxOn; },
+    set sfxOn(v) { AU.sfxOn = v; },
+    get musicOn() { return AU.musicOn; },
+    set musicOn(v) { AU.musicOn = v; }
+  }
+};
+
+BS.emit('boardReady');
 
 })();
