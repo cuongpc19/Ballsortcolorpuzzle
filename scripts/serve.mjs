@@ -83,7 +83,7 @@ function lanAddresses() {
 
 server.listen(PORT, '0.0.0.0', () => {
   const line = '─'.repeat(46);
-  console.log('\n  Ball Sort Puzzle — dev server\n  ' + line);
+  console.log('\n  Tube Tangle — dev server\n  ' + line);
   console.log(`  Máy này    http://localhost:${PORT}/`);
   for (const ip of lanAddresses()) console.log(`  Điện thoại http://${ip}:${PORT}/`);
   console.log('  ' + line);

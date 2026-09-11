@@ -1,6 +1,6 @@
-# Ball Sort Puzzle – Color Game (bản HTML)
+# Tube Tangle
 
-Bản dựng lại bằng HTML/CSS/JS thuần của game **Ball Sort Puzzle – Color Game**,
+**Tube Tangle** – bản dựng lại bằng HTML/CSS/JS thuần của game **Ball Sort Puzzle – Color Game**,
 **dùng đúng level design gốc** trích từ file APK v5.4.0 kèm theo.
 
 ## Chạy
