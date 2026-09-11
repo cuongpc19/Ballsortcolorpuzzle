@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy — Ball Sort Puzzle · Color Game</title>
+<title>Privacy Policy — Tube Tangle</title>
 <style>
   :root{
     --bg:#eef2f7; --panel:#fff; --ink:#2b3550; --soft:#6b7490;
@@ -38,7 +38,7 @@
 <main class="card">
 
 <h1>Privacy Policy</h1>
-<p class="updated">Ball Sort Puzzle · Color Game — last updated 10 September 2026</p>
+<p class="updated">Tube Tangle — last updated 11 September 2026</p>
 
 <p>This is a single-player puzzle game. It has no accounts, no sign-in and no
 chat. It does <span class="no">not</span> ask for your name, your email address,
@@ -56,12 +56,40 @@ on the device you are playing on. That is the whole of it:</p>
   <li>your coin balance and the boosters you own</li>
   <li>your sound, music and alert settings</li>
   <li>a few bookkeeping values the difficulty and reward systems use</li>
+  <li>a random id, described under <b>The event log</b> below</li>
 </ul>
 
-<p>Every one of these keys begins with <code>bsp_</code>. None of them is sent
-anywhere by the game, and none of them describes you — only how far you have got.
-Clearing your browser's site data, or using <b>Erase all progress</b> in the
-game's settings, removes them permanently.</p>
+<p>Every one of these keys begins with <code>bsp_</code>, and none of them
+describes you — only how far you have got. Clearing your browser's site data
+removes them permanently.</p>
+
+<h2>The event log</h2>
+
+<p>So that we can tell which levels are too hard, the game records what happens
+to a level and sends it to a database we run. A row is written when a level
+starts, is finished, is restarted, is skipped, when a booster is used, and when
+a board reaches a dead end. Each row holds:</p>
+
+<ul>
+  <li>the level, the puzzle it dealt, and how hard that puzzle is on paper —
+      its shortest solution, its number of colours and tubes</li>
+  <li>what happened — moves taken, stars, how long it took, which boosters were
+      spent and what they cost</li>
+  <li>a random id for the browser, and a random id for the sitting</li>
+</ul>
+
+<p>The browser id is generated from the clock and a random number the first time
+it is needed. It is not derived from anything about you or your device, it is
+never shown to anyone, and it exists only so that two rows can be known to have
+come from the same browser. Clearing your browser's site data throws it away
+and a new one is made, with no way to connect the two.</p>
+
+<p>A row contains <span class="no">no</span> name, email address, IP-derived
+location, advertising identifier or device fingerprint. Nothing in the log can be
+traced back to a person, by us or by anyone else.</p>
+
+<p>The database is Firebase Realtime Database, run by Google on our behalf, with
+its data held in Singapore. We do not sell, share or transfer what is in it.</p>
 
 <h2>When the game is played on CrazyGames</h2>
 
@@ -78,7 +106,8 @@ serve around the game. We do not receive, see or store any of it.</p>
 <h2>What the game does not do</h2>
 
 <ul>
-  <li><span class="no">No</span> analytics, telemetry or tracking of any kind</li>
+  <li><span class="no">No</span> tracking of you across other sites or apps</li>
+  <li><span class="no">No</span> profile built about you, and no profiling of any kind</li>
   <li><span class="no">No</span> advertising SDK of our own</li>
   <li><span class="no">No</span> cookies</li>
   <li><span class="no">No</span> data sold, shared or transferred to anyone</li>
@@ -88,7 +117,8 @@ serve around the game. We do not receive, see or store any of it.</p>
 <h2>Children</h2>
 
 <p>The game is suitable for all ages. Because it collects no personal information
-from anybody, it collects none from children either.</p>
+from anybody, it collects none from children either. The event log described
+above holds no personal information about a player of any age.</p>
 
 <h2>Changes</h2>
 

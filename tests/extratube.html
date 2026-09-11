@@ -1,0 +1,71 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();if(seed)for(const[k,v]of Object.entries(seed))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),300);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+(async function(){
+  let w = await boot({bsp_coins:99999, bsp_bag:{undo:99,tube:99,hint:99}, bsp_taught:99});
+  const T=()=>$$(w,'#tubes .tube');
+  const banners=()=>$$(w,'#fx .banner, .banner').length;
+
+  w.BS.board.start('classic', 12); await sleep(900);
+
+  head('Thêm 1/4 lọ');
+  $(w,'#btnAdd').click(); await sleep(400);
+  const st = w.BS.board.state();
+  const ex = st.length - 1;
+  ok(st[ex].length === 0, 'lọ bổ sung vừa hiện ra và đang rỗng', st[ex]);
+
+  head('Bỏ bi vào lọ bổ sung thì KHÔNG khen');
+  const src = st.findIndex((t,i)=>i!==ex && t.length);
+  T()[src].click(); await sleep(120);
+  T()[ex].click(); await sleep(900);
+  const st2 = w.BS.board.state();
+  ok(st2[ex].length === 1, 'bi đã vào lọ bổ sung', st2[ex]);
+  ok(!$$(w,'.banner').length, 'không có chữ khen nào hiện ra',
+     $$(w,'.banner').map(e=>e.textContent));
+  const node = T()[ex];
+  ok(!node.classList.contains('done') && !node.classList.contains('capped'),
+     'lọ bổ sung không bị đóng nắp', node.className);
+
+  head('Lấy bi ra khỏi lọ bổ sung');
+  T()[ex].click(); await sleep(160);
+  ok($$(w,'.ball.sel').length > 0, 'nhấc được bi từ lọ bổ sung ra');
+  const c = st2[ex][0];
+  const dst = st2.findIndex((t,i)=>i!==ex && t.length<4 && (!t.length || t[t.length-1]===c));
+  T()[dst].click(); await sleep(900);
+  const st3 = w.BS.board.state();
+  ok(st3[ex].length === 0, 'bi đã trả lại được', [dst, st3[ex]]);
+
+  head('Lọ thường xếp xong vẫn được khen như cũ');
+  let cheered = false, capped = false;
+  const plan = w.BS.board.plan();
+  for (const m of (plan || [])) {
+    T()[m.from].click(); await sleep(90);
+    T()[m.to].click(); await sleep(560);
+    const node = T()[m.to];
+    if (node.classList.contains('cheer')) cheered = true;
+    if (node.classList.contains('capped')) capped = true;
+    if (cheered && capped) break;
+  }
+  ok(cheered, 'lọ thường xếp xong vẫn nảy mừng');
+  ok(capped, 'và vẫn được đóng nắp');
+
+  out();
+})().catch(e=>{L.push('CRASH: '+(e&&e.stack||e));fail++;out();});
+</script>

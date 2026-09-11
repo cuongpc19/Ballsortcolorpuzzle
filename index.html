@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#15151a">
-<title>Ball Sort Puzzle · Color Game</title>
+<title>Tube Tangle · Ball Sort Puzzle</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='10' cy='11' r='7' fill='%231f9ce8'/><circle cx='22' cy='21' r='7' fill='%23f08000'/></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -25,7 +25,7 @@
         <i class="lt"><b style="--c:#e8de10"></b><b style="--c:#8b2fd6"></b><b style="--c:#ff8ec4"></b><b style="--c:#14c8c0"></b></i>
         <i class="lt"><b style="--c:#4ddc10"></b><b style="--c:#1f9ce8"></b><b style="--c:#f08000"></b><b style="--c:#d4141c"></b></i>
       </div>
-      <h1 class="logo"><span>BALL</span> SORT<em>color puzzle</em></h1>
+      <h1 class="logo"><span>TUBE</span> TANGLE<em>ball sort puzzle</em></h1>
     </div>
 
     <div class="homeMid">
@@ -124,12 +124,12 @@
 
       <div class="praise" id="winPraise">Awesome!</div>
 
-      <div class="reward" id="winReward"><i class="coin"></i><span id="winCoins">+10</span></div>
+      <div class="reward" id="winReward"><i class="coin"></i><span id="winCoins">+10</span><b class="x2" id="winX2" hidden>×2</b></div>
 
       <div class="winRow">
         <button class="btn ghost sq" id="btnHome" title="Home">🏠</button>
         <button class="btn ghost sq" id="btnReplay" title="Restart">↺</button>
-        <button class="btn primary grow" id="btnNext"><span>Next level</span> →</button>
+        <button class="btn primary grow" id="btnNext"><span id="nextWord">Next level</span> →</button>
       </div>
     </div>
   </div>
@@ -151,12 +151,25 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════ SPECIAL LEVEL ═══════════════════════════ -->
+<!-- Offered after every fifth classic level: a harder board for double coins,
+     with no number of its own. Turning it down costs nothing. See src/bonus.js. -->
+<div id="bonusOverlay" class="overlay">
+  <div class="panel bonusPanel">
+    <h2 class="bonusTitle">Special Level</h2>
+    <div class="bonusCard"><div class="bonusBoard" id="bonusBoard"></div></div>
+    <div class="bonusPrize"><i class="coin"></i><b>×2</b><span>coins</span></div>
+    <button class="btn primary wide" id="bonusPlay">Play</button>
+    <button class="btn amber wide" id="bonusSkip">Skip</button>
+  </div>
+</div>
+
 <!-- ═══════════════════════════ SKIP CONFIRM ═══════════════════════════ -->
 <div id="skipOverlay" class="overlay">
   <div class="panel">
-    <h2>Skip this level?</h2>
-    <p class="sub">It stays unfinished — no stars, no coins — and you can come
-      back to it any time. You have one skip.</p>
+    <h2 id="skipWhat">Skip this level?</h2>
+    <p class="sub" id="skipWhy">It stays unfinished — no stars, no coins — and
+      you can come back to it any time. You have one skip.</p>
     <button class="btn primary wide" id="skipYes">Skip it</button>
     <button class="btn ghost wide" data-close>Keep playing</button>
   </div>
@@ -205,7 +218,6 @@
     </div>
     <button class="btn ghost wide" id="btnQuit">🏠 Back to home</button>
     <button class="btn ghost wide" id="btnPrivacy">Privacy policy</button>
-    <button class="btn danger wide" id="btnReset">Erase all progress</button>
     <button class="btn ghost wide" data-close>Close</button>
   </div>
 </div>
@@ -214,8 +226,12 @@
 <script src="data/levels-hard.js"></script>
 <script src="data/par-classic.js"></script>
 <script src="data/par-hard.js"></script>
+<script src="data/bonus.js"></script>
+<script src="src/playtest.js"></script>
 <script src="src/save.js"></script>
 <script src="src/board.js"></script>
+<script src="src/bonus.js"></script>
+<script src="src/analytics.js"></script>
 <script src="src/dda.js"></script>
 <script src="src/tutorial.js"></script>
 <script src="src/ui.js"></script>

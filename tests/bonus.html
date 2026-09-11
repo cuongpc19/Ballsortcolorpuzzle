@@ -1,0 +1,145 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+const $$=(w,s)=>[...w.document.querySelectorAll(s)];
+function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();for(const[k,v]of Object.entries(seed||{}))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),340);w.location.reload();};
+  fr.src='../index.html?'+Math.random();});}
+
+/* Drive the board to the end along one plan, then wait for the win panel.
+   ⚠ Waited for, not slept past: the panel is on a delay behind the fireworks
+   and the last ball still in flight, and a fixed sleep that happens to be
+   short reads the *previous* level's panel and calls it a failure. */
+async function playOut(w){
+  const T=()=>[...w.document.querySelectorAll('#tubes .tube')];
+  const plan=w.BS.board.plan();
+  if(!plan) return false;
+  for(const m of plan){
+    T()[m.from].click(); await sleep(55);
+    T()[m.to].click();   await sleep(230);
+  }
+  for(let i=0;i<80;i++){
+    if(w.document.querySelector('#winOverlay').classList.contains('show')) return true;
+    await sleep(120);
+  }
+  return false;
+}
+
+(async function(){
+  const SEED = { bsp_tutor: 9, bsp_seen: 1, bsp_max: { classic: 900 }, bsp_coins: 0,
+                 bsp_wallet_v2: 1 };
+  let w = await boot(SEED);
+  const B = () => w.BS.board, SV = () => w.BS.save, BN = () => w.BS.bonus;
+
+  head('Danh sách suất: nhịp 5, và đã bỏ màn đặc biệt số 2');
+  const n = BN().count();
+  ok(n > 0, 'có ' + n + ' suất trong data/bonus.js', n);
+  const all = [];
+  for (let s = 1; s <= n; s++) all.push(BN().puzzleFor(s));
+  ok(all.indexOf(1) === -1, 'màn đặc biệt số 2 không nằm trong danh sách');
+  ok(new Set(all).size === all.length, 'không suất nào dùng lại màn đã dùng');
+  ok(all.every(i => i >= 0 && i < B().count('hard')), 'mọi chỉ số đều nằm trong kho');
+
+  head('Đến hạn sau mỗi 5 màn cổ điển, và chỉ ở chế độ cổ điển');
+  ok(BN().dueAfter('classic', 4) === 1, 'sau màn 5 → suất 1', BN().dueAfter('classic', 4));
+  ok(BN().dueAfter('classic', 9) === 2, 'sau màn 10 → suất 2', BN().dueAfter('classic', 9));
+  ok(BN().dueAfter('classic', 5) === 0, 'sau màn 6 → không có');
+  ok(BN().dueAfter('classic', 0) === 0, 'sau màn 1 → không có');
+  ok(BN().dueAfter('hard', 4) === 0, 'chế độ Hard không bao giờ được chèn');
+  ok(BN().dueAfter('bonus', 4) === 0, 'màn đặc biệt không đẻ ra màn đặc biệt');
+
+  head('Mọi suất đều khó hơn 5 màn cổ điển ngay trước nó');
+  let worse = 0, checked = 0;
+  for (let s = 1; s <= Math.min(n, 400); s++) {
+    let bar = 0;
+    for (let k = (s - 1) * 5; k < s * 5; k++) bar = Math.max(bar, B().par('classic', k));
+    const p = B().par('bonus', BN().puzzleFor(s));
+    checked++;
+    if (!(p >= bar * 1.3)) worse++;
+  }
+  ok(worse === 0, checked + ' suất đầu đều đạt par ≥ 1,3 lần mốc', worse);
+
+  head('Thắng màn 5 thì lời mời hiện ra');
+  B().start('classic', 4); await sleep(420);
+  ok(!$(w,'#bonusOverlay').classList.contains('show'), 'chưa hiện khi đang chơi');
+  ok(await playOut(w), 'thắng màn 5, bảng thắng hiện ra');
+  $(w,'#btnNext').click(); await sleep(360);
+  ok($(w,'#bonusOverlay').classList.contains('show'), 'bấm Next → lời mời màn đặc biệt');
+  ok(!$(w,'#winOverlay').classList.contains('show'), 'bảng thắng đã đóng');
+  ok($$(w,'#bonusBoard .pvTube').length > 0, 'có vẽ hình bàn cờ xem trước',
+     $$(w,'#bonusBoard .pvTube').length);
+  ok(!!$(w,'.bonusPrize') && /×2|x2/.test($(w,'.bonusPrize').textContent),
+     'có nhắc ×2 xu trên lời mời',
+     $(w,'.bonusPrize') && $(w,'.bonusPrize').textContent.trim());
+
+  head('Bỏ qua: về thẳng màn 6, và không được mời lại');
+  $(w,'#bonusSkip').click(); await sleep(420);
+  ok(!$(w,'#bonusOverlay').classList.contains('show'), 'lời mời đóng');
+  ok(B().mode() === 'classic' && B().index() === 5, 'đang ở màn 6', [B().mode(), B().index()]);
+  ok(SV().bonusDone() === 1, 'suất 1 đã được đánh dấu xong', SV().bonusDone());
+  ok(BN().dueAfter('classic', 4) === 0, 'chơi lại màn 5 cũng không mời lại nữa');
+
+  head('Chơi: màn đặc biệt không mang số của mạch cổ điển');
+  w = await boot(SEED);
+  B().start('classic', 4); await sleep(420);
+  await playOut(w);
+  $(w,'#btnNext').click(); await sleep(360);
+  const coinsBefore = SV().coins();
+  $(w,'#bonusPlay').click(); await sleep(600);
+  ok(B().mode() === 'bonus', 'đang ở màn đặc biệt', B().mode());
+  ok(B().index() === BN().puzzleFor(1), 'đúng màn suất 1 chỉ định', [B().index(), BN().puzzleFor(1)]);
+  ok($(w,'#levelNum').textContent === '★', 'ô số màn không hiện số', $(w,'#levelNum').textContent);
+  ok(SV().level('classic') === 5, 'mạch cổ điển vẫn dừng ở màn 6', SV().level('classic'));
+  ok(!$(w,'#levelTag').hidden && $(w,'#levelTag').textContent === 'SPECIAL',
+     'nhãn SPECIAL', $(w,'#levelTag').textContent);
+  ok(!$(w,'#btnSkip').hidden, 'nút skip in-game hiện sẵn');
+  ok(B().skip.allowed(), 'và bấm được, không cần suất skip nào', SV().skipReady());
+  ok(!B().question.on(), 'màn đặc biệt không úp bi');
+  ok(B().special.on(), 'board biết mình đang ở màn đặc biệt');
+  ok(B().special.resume().index === 5, 'biết chỗ quay về là màn 6', B().special.resume());
+
+  head('Thắng màn đặc biệt: x2 xu, rồi về đúng màn 6');
+  ok(await playOut(w), 'thắng được, bảng thắng hiện ra');
+  ok($(w,'#winLevel').textContent === 'Special level', 'ghi là màn đặc biệt',
+     $(w,'#winLevel').textContent);
+  ok(!$(w,'#winX2').hidden, 'có huy hiệu ×2 cạnh số xu');
+  const paid = SV().coins() - coinsBefore;
+  const E = w.BS.ECON, one = +$(w,'#winCoins').textContent.replace('+','');
+  ok(paid === one, 'ví cộng đúng bằng số hiện trên bảng', [paid, one]);
+  ok(paid >= E.WIN_COINS * 2, 'và gấp đôi mức thường (≥' + E.WIN_COINS * 2 + ')', paid);
+  ok(/Back to level 6/.test($(w,'#btnNext').textContent), 'nút ghi rõ chỗ quay về',
+     $(w,'#btnNext').textContent.trim());
+  $(w,'#btnNext').click(); await sleep(500);
+  ok(B().mode() === 'classic' && B().index() === 5, 'về đúng màn 6', [B().mode(), B().index()]);
+
+  head('Màn đặc biệt không chạm vào DDA');
+  const dda = SV().dda() || {};
+  ok((dda.peak | 0) <= 9, 'đỉnh số màu không bị màn đặc biệt kéo lên', dda.peak);
+
+  head('Bỏ qua màn cổ điển thì KHÔNG bị mời màn đặc biệt');
+  w = await boot({ bsp_tutor: 9, bsp_seen: 1, bsp_max: { classic: 900 }, bsp_coins: 0,
+                   bsp_wallet_v2: 1, bsp_skip: { wins: 9, need: 4, ready: true } });
+  B().start('classic', 19); await sleep(420);          /* màn 20, đúng mốc bội 5 */
+  ok(BN().dueAfter('classic', 19) > 0, 'màn 20 vốn là mốc có suất');
+  ok(B().skip.allowed(), 'có suất skip trong tay');
+  $(w,'#btnSkip').click(); await sleep(240);
+  $(w,'#skipYes').click(); await sleep(600);
+  ok(!$(w,'#bonusOverlay').classList.contains('show'),
+     'thua rồi bỏ qua thì không bị dúi thêm màn khó hơn');
+  ok(B().index() === 20, 'sang thẳng màn 21', B().index());
+
+  out();
+})().catch(e=>{L.push('CRASH: '+(e&&e.stack||e));fail++;out();});
+</script>

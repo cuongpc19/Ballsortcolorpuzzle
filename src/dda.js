@@ -188,7 +188,15 @@ BS.on('levelReady', function (info) {
 });
 var lastLevel = '';
 
+/* ⚠ A special level is a detour off the run, and neither listener below may
+   see it. It is harder than the classic level it follows *by design*, so
+   scoring it would dock the player for accepting the offer, and letting it
+   set the colour peak would put every classic level below that peak out of
+   reach of the HARD badge for good. See src/bonus.js. */
+function detour(info) { return !!info && info.mode === 'bonus'; }
+
 BS.on('won', function (info) {
+  if (detour(info)) return;
   bump(scoreFor(info, tally));
   resetTally();
 });
@@ -198,7 +206,7 @@ BS.on('won', function (info) {
    swallows whatever a handler throws, so anything sharing with the scoring
    above could quietly eat the score reset instead of just failing itself. */
 BS.on('won', function (info) {
-  if (!info || !info.mode) return;
+  if (!info || !info.mode || detour(info)) return;
   var c = board.colorsOf(info.mode, board.src()) | 0;
   load();
   if (c > (st.peak | 0)) { st.peak = c; flush(); }

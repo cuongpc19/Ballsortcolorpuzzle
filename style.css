@@ -373,7 +373,7 @@ body{
 }
 @media (prefers-reduced-motion:reduce){ .ball .ballCoin{animation:none} }
 
-/* ---------- a level that is hard for this player ---------- */
+/* ---------- the special-level badge ---------- */
 /* while a badge is up, it takes the label's place */
 #levelPill.tagged .lbl{display:none}
 .levelTag{
@@ -389,10 +389,10 @@ body{
 }
 .levelTag[hidden]{display:none}
 
-/* The glass gets a little more polish on a hard level. It is the only reward
-   the badge carries, so it has to be worth noticing - but the balls still
-   have to be the easiest thing to read, so this stays a change of finish
-   rather than anything that moves.
+/* The glass gets a little more polish on a special level. It is the only
+   reward the badge carries, so it has to be worth noticing - but the balls
+   still have to be the easiest thing to read, so this stays a change of
+   finish rather than anything that moves.
 
    `::before` is the moulded wall and `::after` belongs to the cheer flash, so
    this works by re-lighting the wall it already has: a warmer, higher-contrast
@@ -405,16 +405,8 @@ body{
       #ffffff 0 26%, #fffdf3 38%, #ffe6ad 50%,
       #ffffff 64%, #fff7de 82%, #ffd98a 100%);
 }
-#tubes.superhard .tube{
-  filter:drop-shadow(0 0 calc(var(--bw) * 2.6) rgba(255,140,165,.48));
-}
-#tubes.superhard .tube::before{
-  background:linear-gradient(112deg,
-      #ffffff 0 26%, #fff6f8 38%, #ffc9d6 50%,
-      #ffffff 64%, #fff0f3 82%, #ff9db4 100%);
-}
 /* a finished tube dims down, and it should keep dimming down */
-#tubes.hard .tube.done, #tubes.superhard .tube.done{filter:brightness(.6) saturate(.88)}
+#tubes.hard .tube.done{filter:brightness(.6) saturate(.88)}
 
 /* ---------- the stuck panel ---------- */
 .stuckPanel .stuckArt{
@@ -1086,4 +1078,60 @@ body{
   .homeStats .coin{width:30px;height:30px}
   .homeIcons{gap:14px}
   .homeIc{width:54px;height:54px;border-radius:17px;font-size:25px}
+}
+
+/* ═══════════════════ special level, between two ═══════════════════ */
+/* The offer after every fifth classic level - see src/bonus.js. */
+/* Wider than the other panels on purpose: this one is mostly a picture, and
+   the picture is the whole of the decision being asked for. `.panel` already
+   carries `width:100%`, so on a narrow phone the overlay's own padding is
+   what bounds it and this cap never bites. */
+.bonusPanel{max-width:480px;padding:26px 22px 22px}
+.bonusTitle{
+  margin:0 0 16px;font-size:34px;font-weight:900;
+  background:linear-gradient(180deg,#ffe98a 0%,#ffb020 62%,#f07a08 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.bonusCard{
+  margin:0 0 17px;padding:16px 14px;border-radius:22px;
+  background:linear-gradient(180deg,#1b2450,#141a38);
+  border:2px solid #4a6adf;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 8px 22px rgba(0,0,0,.45);
+}
+/* Tubes share the row and the balls take their size from the tube, so a
+   six-tube board and a fourteen-tube one both fill the card without either
+   one being measured in JS. */
+.bonusBoard{display:flex;justify-content:center;align-items:flex-end;gap:6px}
+.pvTube{
+  flex:1 1 0;min-width:0;max-width:36px;
+  display:flex;flex-direction:column;gap:3px;padding:4px;
+  border-radius:4px 4px 12px 12px;background:rgba(255,255,255,.06);
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.14);
+}
+.pvTube i{display:block;width:100%;aspect-ratio:1;border-radius:50%}
+.pvTube i.gap{background:transparent}
+.bonusPrize{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  margin:0 0 18px;font-size:23px;font-weight:900;color:#ffd979;
+}
+.bonusPrize span{font-size:16px;font-weight:700;color:#9a9aa3}
+.bonusPrize .coin{width:24px;height:24px}
+.btn.amber{background:linear-gradient(180deg,#ffc44a,#f09410);color:#3b2200}
+
+/* the doubling, said again where it is actually paid */
+.reward .x2{
+  margin-left:3px;padding:3px 8px;border-radius:9px;font-size:16px;
+  background:linear-gradient(180deg,#ffc44a,#f09410);color:#3b2200;
+}
+
+/* ---------- playtest flag ---------- */
+/* Only ever on screen for a ?playtest= link - see src/playtest.js. Loud on
+   purpose: a build with every level unlocked is indistinguishable from a save
+   with every level cleared, and the two must not be mistaken for each other. */
+#playtestFlag{
+  position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:40;
+  padding:4px 12px;border-radius:0 0 10px 10px;
+  background:rgba(240,128,3,.92);color:#fff;
+  font-size:11px;font-weight:800;letter-spacing:.04em;
+  pointer-events:none;white-space:nowrap;
 }

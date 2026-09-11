@@ -1,0 +1,166 @@
+<!doctype html><meta charset=utf-8>
+<body style="background:#111;color:#ddd;font:12px/1.5 monospace;padding:10px">
+<pre id="o">running…</pre>
+<script>
+const L=[];let pass=0,fail=0;
+const out=()=>document.getElementById('o').textContent=
+  L.join('\n')+`\n\n${fail?'✗ FAIL':'✓ ALL PASS'}  —  ${pass} passed, ${fail} failed`;
+function ok(c,l,x){ if(c){pass++;L.push('  ✓ '+l);} else {fail++;L.push('  ✗ '+l+(x!==undefined?'   got: '+JSON.stringify(x):''));} }
+function head(t){L.push('\n── '+t);}
+const fr=document.createElement('iframe');fr.width=440;fr.height=926;
+fr.style.cssText='position:fixed;right:0;top:0;border:0;opacity:.001';
+document.body.appendChild(fr);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const $=(w,s)=>w.document.querySelector(s);
+function boot(seed,q){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWindow;
+  try{w.localStorage.clear();for(const[k,v]of Object.entries(seed||{}))w.localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  fr.onload=()=>setTimeout(()=>res(fr.contentWindow),340);w.location.reload();};
+  fr.src='../index.html?'+(q||'')+'&'+Math.random();});}
+
+/* Stand in for the network. Every flush is captured and nothing leaves the
+   machine - a test suite that posted to the real database would fill it with
+   a hundred fake players a run. */
+let sent=[], failNext=false;
+function tap(w){
+  sent=[];
+  w.fetch=function(url,opt){
+    if(failNext){failNext=false;return Promise.reject(new Error('offline'));}
+    let body={};
+    try{body=JSON.parse(opt.body);}catch(e){}
+    sent.push({url,method:opt.method,body});
+    return Promise.resolve({ok:true});
+  };
+}
+/** every row flushed so far, oldest first */
+function rows(){
+  const all=[];
+  for(const s of sent) for(const k of Object.keys(s.body)) all.push({key:k,...s.body[k]});
+  return all.sort((a,b)=>a.t-b.t);
+}
+const of=n=>rows().filter(r=>r.ev===n);
+const last=n=>of(n)[of(n).length-1];
+
+async function playOut(w){
+  const T=()=>[...w.document.querySelectorAll('#tubes .tube')];
+  const plan=w.BS.board.plan(); if(!plan) return false;
+  for(const m of plan){T()[m.from].click();await sleep(50);T()[m.to].click();await sleep(220);}
+  for(let i=0;i<80;i++){
+    if(w.document.querySelector('#winOverlay').classList.contains('show')) return true;
+    await sleep(120);
+  }
+  return false;
+}
+
+(async function(){
+  const SEED={bsp_tutor:9,bsp_seen:1,bsp_max:{classic:900},bsp_coins:5000,bsp_wallet_v2:1};
+  let w=await boot(SEED);
+  const B=()=>w.BS.board, LOG=()=>w.BS.log;
+
+  head('Mặc định: im lặng ở localhost, và im lặng trong link playtest');
+  ok(LOG().on()===false,'localhost thì tắt, nên chạy test không bắn lên Firebase',LOG().on());
+  ok(typeof w.BS.LOG_CFG.URL==='string' && /firebasedatabase\.app|firebaseio\.com/.test(w.BS.LOG_CFG.URL),
+     'có địa chỉ database',w.BS.LOG_CFG.URL);
+  const pw=await boot(SEED,'playtest=classic');
+  ok(pw.BS.log.on()===false,'link playtest cũng không ghi log');
+
+  w=await boot(SEED,'analytics=1');
+  ok(LOG().on()===true,'?analytics=1 thì bật để xem thử tại chỗ');
+  tap(w);
+  const uid=w.BS.save.uid();
+  ok(typeof uid==='string'&&uid.length>=8,'có id ẩn danh cho máy này',uid);
+  ok(w.BS.save.uid()===uid,'gọi lại vẫn đúng id đó, không đẻ id mới');
+
+  head('Bắt đầu màn: ghi đủ thông tin để sau này so được độ khó');
+  B().start('classic',40); await sleep(500);
+  LOG().flush(); await sleep(120);
+  const st=last('level_start');
+  ok(!!st,'có dòng level_start',rows().map(r=>r.ev));
+  ok(st.mode==='classic'&&st.lv===41,'đúng chế độ và số màn',[st.mode,st.lv]);
+  ok(st.par===B().par('classic',B().src()),'kèm par',[st.par]);
+  ok(st.col>0&&st.tubes>0,'kèm số màu và số ống',[st.col,st.tubes]);
+  ok(!!st.uid&&!!st.sid&&st.t>0,'kèm uid, phiên và mốc thời gian');
+
+  head('Gửi theo lô, đúng đường dẫn, gom theo ngày');
+  ok(sent.length>0&&sent[0].method==='PATCH','gửi bằng PATCH một lô',sent[0]&&sent[0].method);
+  ok(/\/events\.json$/.test(sent[0].url),'đúng đường dẫn events',sent[0].url);
+  ok(Object.keys(sent[0].body).every(k=>/^\d{4}-\d{2}-\d{2}\//.test(k)),
+     'khoá có tiền tố ngày',Object.keys(sent[0].body)[0]);
+
+  head('Booster, bế tắc, chơi lại, bỏ qua');
+  $(w,'#btnAdd').click(); await sleep(400);
+  LOG().flush(); await sleep(120);
+  const bo=last('booster');
+  ok(!!bo&&bo.id==='tube','ghi lại lần dùng booster',bo&&bo.id);
+  ok(['free','bag','coins'].indexOf(bo.how)>=0,'nói rõ trả bằng gì',bo&&bo.how);
+  ok(bo.lv===41,'kèm màn đang chơi',bo&&bo.lv);
+
+  B().stuck.show('dead'); await sleep(120);
+  B().stuck.show('none'); await sleep(120);
+  LOG().flush(); await sleep(120);
+  const sk=of('level_stuck');
+  ok(sk.length===2,'cả hai kiểu bế tắc đều được ghi',sk.length);
+  ok(sk.map(r=>r.kind).sort().join(',')==='dead,none','phân biệt hết đường đi và đi kiểu gì cũng thua',
+     sk.map(r=>r.kind));
+
+  B().stuck.hide();
+  $(w,'#btnRestart').click(); await sleep(200); $(w,'#askYes').click(); await sleep(500);
+  LOG().flush(); await sleep(120);
+  const rp=last('level_replay');
+  ok(!!rp&&rp.lv===41,'ghi lại lần chơi lại',rp&&rp.lv);
+  ok(rp.tube>=1,'và nhớ màn đó đã tốn booster gì',rp&&rp.tube);
+
+  w=await boot({...SEED,bsp_skip:{wins:9,need:4,ready:true}},'analytics=1'); tap(w);
+  B().start('classic',30); await sleep(450);
+  $(w,'#btnSkip').click(); await sleep(220); $(w,'#skipYes').click(); await sleep(500);
+  LOG().flush(); await sleep(120);
+  const sp=last('level_skip');
+  ok(!!sp&&sp.lv===31,'ghi lại lần bỏ qua màn',sp&&sp.lv);
+
+  head('Thắng màn thường: kèm số nước, sao, thời gian, và đã tốn gì');
+  w=await boot(SEED,'analytics=1'); tap(w);
+  B().start('classic',4); await sleep(450);
+  await playOut(w);
+  LOG().flush(); await sleep(150);
+  const cp=last('level_complete');
+  ok(!!cp&&cp.lv===5,'có dòng level_complete',cp&&cp.lv);
+  ok(cp.moves>0&&cp.stars>0&&cp.ms>0,'kèm nước đi, sao, thời gian',[cp.moves,cp.stars,cp.ms]);
+  ok(cp.par===cp.par|0,'kèm par để so',cp.par);
+  ok(of('level_start').length===1,'một màn chỉ mở sổ một lần',of('level_start').length);
+
+  head('Màn đặc biệt cũng được ghi, và ghi riêng ra');
+  $(w,'#btnNext').click(); await sleep(400);
+  $(w,'#bonusPlay').click(); await sleep(700);
+  LOG().flush(); await sleep(150);
+  const off=last('special_offer');
+  ok(!!off&&off.taken===true,'ghi lại là người chơi đã nhận lời mời',off);
+  const sst=of('level_start').filter(r=>r.special)[0];
+  ok(!!sst,'màn đặc biệt cũng có level_start',of('level_start').map(r=>r.mode));
+  ok(sst.mode==='bonus'&&sst.lv===0,'không mượn số màn của mạch cổ điển',[sst.mode,sst.lv]);
+  ok(sst.after===5,'nhưng ghi rõ nó chen sau màn nào',sst.after);
+  ok(sst.par>0&&sst.col>0,'vẫn kèm par và số màu',[sst.par,sst.col]);
+
+  await playOut(w);
+  LOG().flush(); await sleep(150);
+  const scp=of('level_complete').filter(r=>r.special)[0];
+  ok(!!scp,'thắng màn đặc biệt cũng có level_complete');
+  ok(scp.moves>0&&scp.ms>0,'kèm số nước và thời gian',[scp&&scp.moves,scp&&scp.ms]);
+
+  head('Hỏng mạng thì game vẫn chạy, và không mất dòng nào');
+  const before=rows().length;
+  failNext=true;
+  B().special && $(w,'#btnNext').click(); await sleep(500);
+  LOG().flush(); await sleep(200);
+  ok(true,'fetch lỗi không ném ra ngoài, game vẫn chạy tiếp');
+  LOG().flush(); await sleep(200);
+  ok(rows().length>=before,'lô bị lỗi được xếp lại hàng chứ không vứt đi',[before,rows().length]);
+
+  head('Tắt thì không ghi gì nữa');
+  const n0=rows().length;
+  LOG().enable(false);
+  B().start('classic',77); await sleep(400);
+  LOG().flush(); await sleep(150);
+  ok(rows().length===n0,'tắt là im hẳn',[n0,rows().length]);
+
+  out();
+})().catch(e=>{L.push('CRASH: '+(e&&e.stack||e));fail++;out();});
+</script>

@@ -58,7 +58,13 @@ if (!html.includes(anchor)) {
   process.exit(1);
 }
 html = html.replace(anchor, '<script src="src/platform-crazy.js"></script>\n' + anchor);
+
+/* ⚠ The playtest link unlocks all 17,696 levels. Harmless on a build only the
+   author opens, a cheat code on a hosted one - and a reviewer who finds it has
+   found a level skip. The tag goes, and so does the file. */
+html = html.replace(/[ \t]*<script src="src\/playtest\.js"><\/script>\r?\n/, '');
 writeFileSync(htmlPath, html);
+rmSync(join(DIST, 'src', 'playtest.js'), { force: true });
 
 /* ─────────────────────────────── checks ───────────────────────────── */
 
@@ -99,6 +105,10 @@ if (!existsSync(join(DIST, 'public', 'privacy.html'))) {
   problems.push('thieu public/privacy.html - form nop va man Cai dat deu can no');
 }
 
+/* ...and the playtest link must be gone from both the folder and the page. */
+if (existsSync(join(DIST, 'src', 'playtest.js'))) problems.push('playtest.js lot vao dist');
+if (html.includes('playtest.js')) problems.push('index.html van nap playtest.js');
+
 /* No dev tool may have hitched a ride. */
 for (const bad of NEVER) {
   if (existsSync(join(DIST, bad))) problems.push(`${bad}/ lot vao dist`);
@@ -124,6 +134,7 @@ say(bytes <= 20 * 1024 * 1024
 say(absolute.length ? '  ⚠ co duong dan tuyet doi' : '  ✓ duong dan tuong doi');
 say(`  ✓ co SDK CrazyGames (${sdkFiles.length} file)`);
 say(`  ✓ khong co ${NEVER.join(', ')}`);
+say('  ✓ khong co link playtest');
 
 if (problems.length) {
   say('');

@@ -29,7 +29,9 @@ var K = {
   bag:    'bsp_bag',      /* {undo,tube,hint} - boosters owned             */
   alert:  'bsp_alert',    /* stuck alerts on or off                        */
   lucky:  'bsp_lucky',    /* {c8: 1} - lucky coins already banked          */
-  skip:   'bsp_skip'      /* {wins, need, ready} - skip bookkeeping        */
+  skip:   'bsp_skip',     /* {wins, need, ready} - skip bookkeeping        */
+  bonus:  'bsp_bonus',    /* highest special-level slot settled - bonus.js */
+  uid:    'bsp_uid'       /* anonymous id for the event log - analytics.js  */
 };
 
 /* --------------------------------- economy ------------------------------ */
@@ -78,14 +80,17 @@ var ECON = BS.ECON = {
   REPLAY_COST: 50,
 
   /* ---------------------------------------------------------------------
-   * Lucky coin. The original's numbers exactly, from the one config whose
+   * Lucky coin. The gating is the original's, from the one config whose
    * default ships switched on:
    *   {"enable":true,"start":5,"probability":0.1,"coins":[10,20],
    *    "limit":3000,"limit_prob":0.05}
+   * ...but the payout is ours: a flat 5, where theirs rolled 10 or 20. A coin
+   * worth two boosters turns the find into the point of the level; worth 5 it
+   * stays what it should be, a small piece of luck on the way past.
    * ------------------------------------------------------------------- */
   LUCKY_FROM: 4,                 /* 0-based, so level 5                    */
   LUCKY_PROB: 0.10,
-  LUCKY_COINS: [10, 20],
+  LUCKY_COINS: [5],
   LUCKY_LIMIT: 3000,             /* a fat wallet needs the coin less...    */
   LUCKY_LIMIT_PROB: 0.05,        /* ...so the odds halve                   */
 
@@ -230,6 +235,30 @@ var save = BS.save = {
     write(K.lucky, m);
     save.addCoins(coins);
     return coins;
+  },
+
+  /* ------- who this browser is, to the event log ------- */
+
+  /* A random id minted on first use and never shown to anyone. It is not a
+     login and not tied to a person: it exists so two events can be known to
+     come from the same browser, which is the whole of what the funnel needs.
+     ⚠ Not derived from anything about the device - a fingerprint would be a
+     different thing entirely, and would make the privacy policy a lie. */
+  uid: function () {
+    var v = read(K.uid, null);
+    if (typeof v === 'string' && v.length >= 8) return v;
+    v = 'u' + Date.now().toString(36) +
+        Math.random().toString(36).slice(2, 10);
+    write(K.uid, v);
+    return v;
+  },
+
+  /* ------- special levels between classic ones ------- */
+
+  /** the highest slot already played or turned down - see src/bonus.js */
+  bonusDone: function () { return read(K.bonus, 0) | 0; },
+  setBonusDone: function (slotNo) {
+    if ((slotNo | 0) > save.bonusDone()) write(K.bonus, slotNo | 0);
   },
 
   /* ------- the skip credit ------- */
@@ -418,7 +447,10 @@ var save = BS.save = {
   /** every level whose puzzle has been frozen, for tests and debugging */
   allPicks: function () { return read(K.pick, {}); },
 
-  /** wipe everything - used by the settings screen */
+  /* Wipe everything. No longer offered in Settings - a button that destroys a
+     player's whole run sat one mis-tap away from the sound toggle - so this is
+     reached only from the console or a test. Kept because clearing site data by
+     hand is the only other way, and that is not something to ask of anyone. */
   reset: function () {
     for (var k in K) store.removeItem(K[k]);
     store.removeItem('ballsort.progress.v1');

@@ -1,4 +1,5 @@
-/* Ball Sort Puzzle - Color Game (HTML clone)
+/* Tube Tangle - a ball sort puzzle, built as an HTML clone of
+   Ball Sort Puzzle - Color Game.
    Level data extracted from the original APK (v5.4.0):
      classic : 15100 levels, 4 balls / tube
      hard    :  2596 levels, 6 or 8 balls / tube                       */
@@ -17,6 +18,11 @@ var PACKS = {
   classic: { name: 'Classic', depth: 4, data: window.LEVELS_CLASSIC || [],
              par: window.PAR_CLASSIC || '' },
   hard:    { name: 'Hard',    depth: 0, data: window.LEVELS_HARD    || [],
+             par: window.PAR_HARD    || '' },
+  /* The special levels dropped between classic ones. Same boards as Hard
+     mode, but its own mode name so its stars and records sit in their own
+     save slots and beating one never unlocks a Hard level. See src/bonus.js. */
+  bonus:   { name: 'Special', depth: 0, data: window.LEVELS_HARD    || [],
              par: window.PAR_HARD    || '' }
 };
 
@@ -112,6 +118,11 @@ var S = {
   t0: 0               /* when the level started                      */
 };
 
+/* Where the classic run was left when a special level took over, so that
+   winning it, skipping it or walking home all land back in the same place.
+   See src/bonus.js. */
+var bonusResume = { mode: 'classic', index: 0 };
+
 var el = {
   board:    document.getElementById('board'),
   tubes:    document.getElementById('tubes'),
@@ -137,7 +148,12 @@ var el = {
   levelTag: document.getElementById('levelTag'),
   btnSkip:  document.getElementById('btnSkip'),
   stuck:    document.getElementById('stuckOverlay'),
-  skipAsk:  document.getElementById('skipOverlay')
+  skipAsk:  document.getElementById('skipOverlay'),
+  skipWhat: document.getElementById('skipWhat'),
+  skipWhy:  document.getElementById('skipWhy'),
+  skipYes:  document.getElementById('skipYes'),
+  nextWord: document.getElementById('nextWord'),
+  winX2:    document.getElementById('winX2')
 };
 
 var REDUCED = !!(window.matchMedia &&
@@ -329,26 +345,18 @@ var SFX = {
 function sfx(name, arg) { if (AU.ready && AU.sfxOn) SFX[name] && SFX[name](arg); }
 
 /* ========================= audio: music ============================= */
-/* a bouncy 4-bar loop: plucky bass, marimba melody, kick + shaker      */
+/* Two loops, both synthesised, both four bars long:                    */
+/*                                                                      */
+/*   calm   - the default. A slow music box over a breathing pad, no    */
+/*            drums: quiet enough to leave on while you think.          */
+/*   arcade - the bouncy original. Kept for the special levels, where   */
+/*            the jump in tempo is half of what makes them feel like an */
+/*            event. See musicUse().                                    */
+/*                                                                      */
+/* A track is nothing but { bpm, gain, step(i, t) } - `step` paints one */
+/* eighth note at audio-clock time `t`, and musicTick walks the clock.  */
 
-var BPM = 118;
-var STEP = 30 / BPM;                    /* one eighth note in seconds   */
-
-var CHORDS = [                          /* C  -  G  -  Am  -  F         */
-  { root: 48, tones: [60, 64, 67] },
-  { root: 43, tones: [59, 62, 67] },
-  { root: 45, tones: [57, 60, 64] },
-  { root: 41, tones: [57, 60, 65] }
-];
-
-var MELODY = [                          /* 32 eighth notes, 0 = rest    */
-  72, 0, 76, 0,  74, 0,  0, 72,
-  71, 0, 74, 0,  79, 0,  0, 76,
-  72, 0, 76, 0,  81, 0,  0, 79,
-  77, 0, 74, 0,  72, 0, 74,  0
-];
-
-var MUS = { timer: null, next: 0, step: 0 };
+var MUS = { timer: null, next: 0, step: 0, name: 'calm' };
 
 function musNote(o) {
   var c = AU.ctx, t = o.t;
@@ -376,9 +384,88 @@ function musNoise(o) {
   src.start(t); src.stop(t + o.dur + 0.02);
 }
 
-function scheduleStep(step, t) {
+/* ------------------- calm: the everyday loop ----------------------- */
+/* 72 BPM, so a bar is 3.3s and the whole loop a touch over 13s - long
+   enough that it never nags. Cmaj7 - Am7 - Fmaj7 - G6, the four chords
+   that go round for ever without ever asking to resolve. */
+
+var C_CHORDS = [
+  { root: 48, tones: [60, 64, 67, 71] },   /* Cmaj7 */
+  { root: 45, tones: [57, 60, 64, 67] },   /* Am7   */
+  { root: 41, tones: [57, 60, 65, 69] },   /* Fmaj7 */
+  { root: 43, tones: [59, 62, 67, 69] }    /* G6    */
+];
+
+/* one arpeggio note every quarter; index 4+ means "that tone, an octave
+   up", which is what lifts the end of the bar */
+var C_ARP = [
+  [0, -1, 1, -1, 2, -1, 4, -1],
+  [1, -1, 2, -1, 3, -1, 5, -1]
+];
+
+/* the top line, four notes in thirteen seconds - it sits between the
+   arpeggio notes rather than on them, so nothing lands twice */
+var C_MELODY = [
+   0, 0, 0, 0,  0, 79, 0, 0,
+   0, 0, 0, 76,  0, 0, 0, 0,
+   0, 0, 0, 0,  0, 81, 0, 0,
+   0, 0, 0, 79,  0, 0, 76, 0
+];
+
+function calmStep(step, t) {
   var bar = Math.floor(step / 8) % 4;
-  var ch = CHORDS[bar];
+  var ch = C_CHORDS[bar];
+  var inBar = step % 8;
+
+  /* the pad: a slow swell under everything, an octave below the chord */
+  if (inBar === 0) {
+    ch.tones.slice(0, 3).forEach(function (n, i) {
+      musNote({ t: t + i * 0.02, f: midi(n - 12), dur: 3.4, type: 'triangle',
+                vol: 0.028, atk: 0.9 });
+    });
+    musNote({ t: t, f: midi(ch.root), dur: 1.8, type: 'sine', vol: 0.085, atk: 0.06 });
+  }
+  if (inBar === 4) {
+    musNote({ t: t, f: midi(ch.root + 7), dur: 1.2, type: 'sine', vol: 0.045, atk: 0.06 });
+  }
+
+  /* music box */
+  var p = C_ARP[bar % 2][inBar];
+  if (p >= 0) {
+    var n = p < 4 ? ch.tones[p] : ch.tones[p - 4] + 12;
+    musNote({ t: t, f: midi(n), dur: 1.1, type: 'sine', vol: 0.07,
+              atk: 0.004, echo: 0.26 });
+    musNote({ t: t, f: midi(n + 12), dur: 0.34, type: 'triangle', vol: 0.018, atk: 0.003 });
+  }
+
+  var m = C_MELODY[step % 32];
+  if (m) {
+    musNote({ t: t, f: midi(m), dur: 1.6, type: 'sine', vol: 0.075,
+              atk: 0.012, echo: 0.34 });
+    musNote({ t: t, f: midi(m - 12), dur: 0.5, type: 'triangle', vol: 0.02, atk: 0.01 });
+  }
+}
+
+/* ------------------- arcade: the special-level loop ---------------- */
+/* plucky bass, marimba melody, kick + shaker at 118 BPM               */
+
+var A_CHORDS = [                        /* C  -  G  -  Am  -  F         */
+  { root: 48, tones: [60, 64, 67] },
+  { root: 43, tones: [59, 62, 67] },
+  { root: 45, tones: [57, 60, 64] },
+  { root: 41, tones: [57, 60, 65] }
+];
+
+var A_MELODY = [                        /* 32 eighth notes, 0 = rest    */
+  72, 0, 76, 0,  74, 0,  0, 72,
+  71, 0, 74, 0,  79, 0,  0, 76,
+  72, 0, 76, 0,  81, 0,  0, 79,
+  77, 0, 74, 0,  72, 0, 74,  0
+];
+
+function arcadeStep(step, t) {
+  var bar = Math.floor(step / 8) % 4;
+  var ch = A_CHORDS[bar];
   var inBar = step % 8;
 
   /* bouncy bass */
@@ -397,7 +484,7 @@ function scheduleStep(step, t) {
   }
 
   /* marimba melody */
-  var m = MELODY[step % 32];
+  var m = A_MELODY[step % 32];
   if (m) {
     musNote({ t: t, f: midi(m), dur: 0.42, type: 'triangle', vol: 0.11,
               atk: 0.005, echo: 0.22 });
@@ -413,15 +500,61 @@ function scheduleStep(step, t) {
   }
 }
 
+var TRACKS = {
+  calm:   { bpm: 72,  gain: 0.48, step: calmStep },
+  arcade: { bpm: 118, gain: 0.50, step: arcadeStep }
+};
+
+function track() { return TRACKS[MUS.name] || TRACKS.calm; }
+
+/* Which loop a level gets. The calm one is the everyday music; the bouncy
+   one turns up on two levels out of every ten, counting from level 2, so
+   that the lift lands about twice a session and never on the first level.
+ *
+ * ⚠ Drawn from the level number, not from Math.random(): a level has to
+ * sound the same every time you come back to it, or restarting a board
+ * would shuffle the music under the player.
+ */
+function hash32(n) {
+  n = Math.imul(n ^ 0x9e3779b9, 2654435761) >>> 0;
+  n ^= n >>> 15;
+  n = Math.imul(n, 2246822519) >>> 0;
+  return (n ^ (n >>> 13)) >>> 0;
+}
+
+function trackFor(mode, index) {
+  /* a special level borrows no number from the run, so it takes the default */
+  if (mode === 'bonus') return 'calm';
+  var n = (index | 0) + 1 - 2;                /* 0 at level 2 */
+  if (n < 0) return 'calm';
+  var block = Math.floor(n / 10), at = n % 10;
+  var h = hash32(block);
+  var a = h % 10;                             /* first pick of the ten */
+  var b = (a + 1 + (hash32(h) % 9)) % 10;     /* second, never the same one */
+  return (at === a || at === b) ? 'arcade' : 'calm';
+}
+
+/** switch loops; see trackFor for which level gets which */
+function musicUse(name) {
+  if (!TRACKS[name] || MUS.name === name) return;
+  MUS.name = name;
+  if (!MUS.timer) return;      /* silent right now: it starts on the new one */
+  /* The two run at different tempos, so there is no beat to cut between:
+     fade the old loop away and bring the new one in from its first bar. */
+  musicStop();
+  setTimeout(function () { if (musicAudible()) musicStart(); }, 450);
+}
+
 function musicTick() {
   if (!AU.ready) return;
   var c = AU.ctx;
   /* the clock stands still while the context is suspended - resync so we
      don't dump a burst of back-dated notes when it wakes up            */
   if (MUS.next < c.currentTime) MUS.next = c.currentTime + 0.05;
+  var tr = track(), step = 30 / tr.bpm;     /* one eighth note, in seconds */
   while (MUS.next < c.currentTime + 0.4) {
-    scheduleStep(MUS.step, MUS.next);
-    MUS.next += STEP;
+    tr.step(MUS.step, MUS.next);
+    MUS.next += step;
     MUS.step++;
   }
 }
@@ -435,7 +568,7 @@ function musicStart() {
   MUS.timer = setInterval(musicTick, 60);
   AU.musBus.gain.cancelScheduledValues(AU.ctx.currentTime);
   AU.musBus.gain.setValueAtTime(0.0001, AU.ctx.currentTime);
-  AU.musBus.gain.exponentialRampToValueAtTime(0.5, AU.ctx.currentTime + 1.4);
+  AU.musBus.gain.exponentialRampToValueAtTime(track().gain, AU.ctx.currentTime + 1.4);
 }
 
 function musicStop() {
@@ -456,7 +589,7 @@ function duck(seconds) {
   g.cancelScheduledValues(t);
   g.setValueAtTime(Math.max(0.0001, g.value), t);
   g.exponentialRampToValueAtTime(0.12, t + 0.08);
-  g.exponentialRampToValueAtTime(0.5, t + seconds);
+  g.exponentialRampToValueAtTime(track().gain, t + seconds);
 }
 
 /* ------------------------- audio preferences ------------------------ */
@@ -675,6 +808,7 @@ function loadLevel(mode, index) {
   if (!lv) { src = index; lv = decodeLevel(mode, index); }
   if (!lv) return;
   S.mode = mode;
+  musicUse(trackFor(mode, index));
   S.index = index;
   S.src = src;
   S.depth = S.cap = lv.depth;
@@ -697,7 +831,7 @@ function loadLevel(mode, index) {
   dealFaceDown();
   dealLucky();
   /* how hard is this one *for this player* - see dda.js */
-  S.tier = (BS.dda && BS.dda.tier)
+  S.tier = (mode !== 'bonus' && BS.dda && BS.dda.tier)
     ? BS.dda.tier(index, colorsOf(mode, src), S.question) : 0;
   paintTier();
   refreshSkip();
@@ -952,13 +1086,14 @@ function paint(opts) {
   for (var i = 0; i < nodes.length; i++) {
     /* only a *filled* single-colour tube dims down - empty ones stay
        bright because they are still valid targets                     */
-    var sealed = S.tubes[i].length > 0 && isDone(S.tubes[i], i);
+    var sealed = sealedAt(i);
     nodes[i].classList.toggle('done', sealed);
     nodes[i].classList.toggle('capped', sealed);
     nodes[i].classList.toggle('lift', S.sel === i);
   }
 
-  el.levelNum.textContent = S.index + 1;
+  /* A special level borrows no number from the classic run - see src/bonus.js */
+  el.levelNum.textContent = S.mode === 'bonus' ? '★' : (S.index + 1);
   if (el.moveNum) el.moveNum.textContent = S.moves;
   refreshBoosters();
 }
@@ -1062,7 +1197,9 @@ function questionTubes(count, seed) {
 
 /** turn the chosen tubes face down - everything beneath the top ball */
 function dealFaceDown() {
-  S.question = questionLevel(S.index);
+  /* Classic only. A special level is already the occasion; dealing it face
+     down as well stacks two surprises on one board. */
+  S.question = S.mode === 'classic' && questionLevel(S.index);
   if (!S.question) return;
   var filled = [], i;
   for (i = 0; i < S.tubes.length; i++) if (S.tubes[i].length) filled.push(i);
@@ -1194,6 +1331,9 @@ function checkStuck() {
 
 function showStuck(kind) {
   if (S.won || el.win.classList.contains('show')) return;
+  /* Reported here rather than in each branch below: the "dead" branch returns
+     early, so an emit further down would only ever see half the dead ends. */
+  BS.emit('stuck', { mode: S.mode, index: S.index, kind: kind, moves: S.moves });
   if (kind === 'dead') {
     /* they can still move, so do not stop the game - just say it plainly and
        point at the way back */
@@ -1206,7 +1346,6 @@ function showStuck(kind) {
   el.stuck.classList.add('show');
   sfx('deny');
   buzz([16, 60, 16]);
-  BS.emit('stuck', { mode: S.mode, index: S.index });
 }
 
 function hideStuck() { el.stuck.classList.remove('show'); }
@@ -1227,6 +1366,9 @@ function breathe(node) {
  */
 
 function skipAllowed() {
+  /* A special level is optional in the first place, so walking out of one
+     costs nothing and needs no earned credit - the button is simply there. */
+  if (S.mode === 'bonus') return !S.won;
   return S.index >= ECON.SKIP_FROM && save.skipReady() && !S.won;
 }
 
@@ -1239,13 +1381,33 @@ function askSkip() {
     return;
   }
   hideStuck();
+  var special = S.mode === 'bonus';
+  if (el.skipWhat) el.skipWhat.textContent = special ? 'Leave the special level?'
+                                                     : 'Skip this level?';
+  if (el.skipWhy) {
+    el.skipWhy.textContent = special
+      ? 'It is a bonus, not part of your run — you go straight back to level ' +
+        (bonusResume.index + 1) + '. This one does not come round again.'
+      : 'It stays unfinished — no stars, no coins — and you can come back to ' +
+        'it any time. You have one skip.';
+  }
+  if (el.skipYes) el.skipYes.textContent = special ? 'Leave it' : 'Skip it';
   el.skipAsk.classList.add('show');
   sfx('ui');
 }
 
 function doSkip() {
   el.skipAsk.classList.remove('show');
-  if (!skipAllowed() || !save.useSkip()) return;
+  if (!skipAllowed()) return;
+  /* Walking out of a special level spends no skip credit and touches no
+     progress - it just drops the player back into the classic run. */
+  if (S.mode === 'bonus') {
+    clearStuck();
+    sfx('whoosh');
+    leaveBonus();
+    return;
+  }
+  if (!save.useSkip()) return;
   clearStuck();
   /* A skipped level is opened, not beaten: it unlocks the next one and
      nothing else. No stars, no coins, no personal best - the level is still
@@ -1260,32 +1422,37 @@ function doSkip() {
 
 function refreshSkip() {
   if (!el.btnSkip) return;
-  var on = S.index >= ECON.SKIP_FROM && save.skipReady();
+  var on = S.mode === 'bonus' ||
+           (S.index >= ECON.SKIP_FROM && save.skipReady());
   var was = !el.btnSkip.hidden;
   el.btnSkip.hidden = !on;
   /* it has just appeared - draw the eye to it once, then leave it alone */
   if (on && !was) breathe(el.btnSkip);
 }
 
-/* ============================ hard levels ========================= */
+/* ========================== special levels ======================== */
 /* The original marks levels hard on a fixed cadence - `hard_step: 5` means
- * every fifth level wears the badge whoever is holding the phone. Ours asks
- * the difficulty system instead, so the badge lands on a level that is hard
- * *for this player*: see dda.js. A hard level also gets glassier tubes,
- * because an occasion should look like one.
+ * every fifth level wears the badge whoever is holding the phone. We ran the
+ * same badge off the difficulty system instead, so HARD and SUPER landed on
+ * whatever was hard *for this player*. That is gone now: the special levels
+ * are the occasion, and an ordinary level calling itself hard alongside them
+ * only spent the word. One badge, and it means one thing.
+ *
+ * `S.tier` is still worked out - the difficulty system reads it and the
+ * analytics report it - it simply no longer shows on the bar.
  */
 function paintTier() {
-  var t = S.tier | 0;
-  el.tubes.classList.toggle('hard', t === 1);
-  el.tubes.classList.toggle('superhard', t >= 2);
+  var special = S.mode === 'bonus';
+  /* glassier tubes: an occasion should look like one */
+  el.tubes.classList.toggle('hard', special);
   if (!el.levelTag) return;
   /* The badge stands where the word "Level" does rather than after it: the
      restart button is pinned to the centre of the bar, and a pill that grows
      to the right walks straight into it. */
-  el.levelTag.textContent = t >= 2 ? 'SUPER' : t === 1 ? 'HARD' : '';
-  el.levelTag.className = 'levelTag' + (t >= 2 ? ' sh' : '');
-  el.levelTag.hidden = !t;
-  if (el.levelTag.parentNode) el.levelTag.parentNode.classList.toggle('tagged', !!t);
+  el.levelTag.textContent = special ? 'SPECIAL' : '';
+  el.levelTag.className = 'levelTag' + (special ? ' sh' : '');
+  el.levelTag.hidden = !special;
+  if (el.levelTag.parentNode) el.levelTag.parentNode.classList.toggle('tagged', special);
 }
 
 /* ============================== rules ============================== */
@@ -1304,8 +1471,12 @@ function runLen(tube) {
 /* The extra tube from the booster grows a quarter at a time, so capacity is a
    per-tube question now: every tube holds S.cap except that last one, which
    holds however many slots have been paid for. */
+function isExtra(ti) {
+  return S.extraSlots > 0 && ti === S.tubes.length - 1;
+}
+
 function capOf(ti) {
-  return (S.extraSlots > 0 && ti === S.tubes.length - 1) ? S.extraSlots : S.cap;
+  return isExtra(ti) ? S.extraSlots : S.cap;
 }
 
 function isDone(tube, ti) {
@@ -1316,6 +1487,13 @@ function isDone(tube, ti) {
 }
 
 function isWin() { return S.tubes.every(isDone); }
+
+/* A finished tube is out of play: it dims, it caps, and it will not hand a
+   ball back. The booster tube is never finished in that sense - it is a
+   parking spot, so whatever was parked there has to come out again. */
+function sealedAt(ti) {
+  return S.tubes[ti].length > 0 && isDone(S.tubes[ti], ti) && !isExtra(ti);
+}
 
 function canMove(from, to) {
   if (from === to) return 0;
@@ -1371,7 +1549,10 @@ function performMove(from, to, n, record) {
 
   BS.emit('moved', { from: from, to: to, n: n });
 
-  var full = isDone(S.tubes[to], to) && S.tubes[to].length;
+  /* The booster tube is a parking spot the player paid for, not something they
+     solved - filling it is no achievement, least of all when it is one slot
+     deep and a single ball "completes" it. So it gets no fanfare. */
+  var full = isDone(S.tubes[to], to) && S.tubes[to].length && !isExtra(to);
   setTimeout(function () {
     if (full) { S.combo++; celebrate(to); }
     if (isWin() && !S.won) { S.won = true; setTimeout(win, full ? 700 : 320); }
@@ -1569,7 +1750,7 @@ function tapTube(i) {
   var d = S.geo.d;
 
   if (S.sel === -1) {
-    if (!S.tubes[i].length || isDone(S.tubes[i], i)) { nudge(i); sfx('deny'); return; }
+    if (!S.tubes[i].length || sealedAt(i)) { nudge(i); sfx('deny'); return; }
     if (autoImportOn()) {
       var only = soleTarget(i);
       if (only !== -1) {
@@ -1640,14 +1821,22 @@ function boosterState(id) {
  * be paid it says so and returns false.
  */
 function takeBooster(id) {
-  if (freeLeft(id) > 0) { S.freeUsed[id]++; refreshBoosters(); BS.emit('boosterUsed', id); return true; }
-  if (save.useBooster(id)) { refreshBoosters(); BS.emit('boosterUsed', id); return true; }
+  /* ⚠ `boosterUsed` keeps its bare-id payload - dda.js counts them and a
+     changed shape would silently stop the scoring. The detail rides alongside
+     on its own event instead. */
+  function spent(how, price) {
+    BS.emit('boosterUsed', id);
+    BS.emit('boosterSpent', { id: id, how: how, price: price | 0,
+                              mode: S.mode, index: S.index, moves: S.moves });
+  }
+  if (freeLeft(id) > 0) { S.freeUsed[id]++; refreshBoosters(); spent('free', 0); return true; }
+  if (save.useBooster(id)) { refreshBoosters(); spent('bag', 0); return true; }
   /* nothing free and nothing in the bag: the button is showing a price, so
      honour it and charge for this one use */
   var price = ECON.PRICE[id] | 0;
   if (save.spend(price)) {
     refreshBoosters();
-    BS.emit('boosterUsed', id);
+    spent('coins', price);
     return true;
   }
   sfx('deny');
@@ -1693,6 +1882,9 @@ function refreshBoosters() {
   el.btnUndo.disabled = !S.history.length;
   if (el.btnAdd) el.btnAdd.disabled = S.extraSlots >= S.cap;
 }
+
+/* the home screen is always the calm loop, whatever the level was playing */
+BS.on('goHome', function () { musicUse('calm'); });
 
 BS.on('bag', refreshBoosters);
 BS.on('coins', function () { if (S.geo) refreshBoosters(); });
@@ -1880,6 +2072,16 @@ function win() {
   var stars = S.moves <= ref * 1.10 ? 3 : S.moves <= ref * 1.45 ? 2 : 1;
 
   var res = save.finish(S.mode, S.index, S.moves, stars);
+
+  /* Double coins on a special level, and that is the whole of the reward:
+     it unlocks nothing, because there is nothing after it to unlock. The
+     second payment goes through `addCoins` so the wallet animates once per
+     coin the same as anywhere else. */
+  if (S.mode === 'bonus' && res.coins > 0) {
+    save.addCoins(res.coins);
+    res.coins *= 2;
+  }
+
   save.skipWin();          /* four to six wins buys the next skip */
   BS.emit('won', { mode: S.mode, index: S.index, moves: S.moves,
                    par: par, stars: stars, question: !!S.question });
@@ -1894,7 +2096,15 @@ var PRAISE = [[], ['Level cleared!', 'Done!', 'You got through!'],
                   ['Perfect!', 'Nothing to fault!', 'Flawless!']];
 
 function showWinPanel(stars, res) {
-  el.winLevel.textContent = 'Level ' + (S.index + 1);
+  var special = S.mode === 'bonus';
+  el.winLevel.textContent = special ? 'Special level' : 'Level ' + (S.index + 1);
+  if (el.nextWord) {
+    el.nextWord.textContent = special ? 'Back to level ' + (bonusResume.index + 1)
+                                      : 'Next level';
+  }
+  /* x2 sits next to the coins so the doubling is read where it is paid,
+     not only promised on the way in */
+  if (el.winX2) el.winX2.hidden = !(special && res.coins > 0);
 
   /* The reward line only shows on a first clear - a replay pays nothing and
      saying "+0" would read as a bug. */
@@ -1966,12 +2176,93 @@ function confetti() {
 
 function nextLevel() {
   el.win.classList.remove('show');
+  if (S.mode === 'bonus') { leaveBonus(); return; }
+
   var last = PACKS[S.mode].data.length - 1;
   if (S.index >= last) { toast('You have finished this mode!'); BS.emit('goHome'); return; }
   var i = S.index + 1;
+
+  /* Every fifth classic level *won* ends with the offer of a special one. The
+     offer takes over from here: whichever button they press lands on level `i`.
+
+     ⚠ Won, not merely left behind. Skipping is how a player says a level beat
+     them, and answering that with a board built to be harder still is the one
+     moment the offer would land as a taunt. */
+  var slot = (S.won && BS.bonus) ? BS.bonus.dueAfter(S.mode, S.index) : 0;
+  if (slot) {
+    bonusResume = { mode: S.mode, index: i };
+    /* ⚠ Bank the classic level here, before the detour rather than after it.
+       The player earned level `i` by winning this one; if they close the app
+       while the offer is up, or part way through the special board, they must
+       come back to `i` and not be made to beat this level again. */
+    setCurrent(S.mode, i);
+    sfx('ui');
+    BS.emit('bonusOffer', { slot: slot, puzzle: BS.bonus.puzzleFor(slot) });
+    return;
+  }
   setCurrent(S.mode, i);
   sfx('ui');
   loadLevel(S.mode, i);
+}
+
+/* ------------------------ the special detour ----------------------- */
+
+/* A still picture of a board, for the offer card. The board draws it because
+   the board owns the palette; the shell only decides where it sits. */
+function previewInto(host, mode, index) {
+  if (!host) return;
+  host.innerHTML = '';
+  var lv = decodeLevel(mode, index);
+  if (!lv) return;
+  var frag = document.createDocumentFragment();
+  for (var t = 0; t < lv.tubes.length; t++) {
+    var tube = document.createElement('div');
+    tube.className = 'pvTube';
+    /* top slot first: the column reads downwards, the tube fills upwards */
+    for (var b = lv.depth - 1; b >= 0; b--) {
+      var dot = document.createElement('i');
+      var c = lv.tubes[t][b] | 0;
+      if (c) dot.style.background = ballBackground(c);
+      else dot.className = 'gap';
+      tube.appendChild(dot);
+    }
+    frag.appendChild(tube);
+  }
+  host.appendChild(frag);
+}
+
+/** take the offer: play the special board this slot holds */
+function startBonus(slot) {
+  var puzzle = BS.bonus ? BS.bonus.puzzleFor(slot) : -1;
+  if (puzzle < 0) { leaveBonus(); return; }
+  BS.bonus.settle(slot);
+  BS.emit('bonusAnswer', { slot: slot, puzzle: puzzle, taken: true });
+  el.win.classList.remove('show');
+  sfx('ui');
+  /* ⚠ No `setCurrent`. A special level is not a place the player can be left:
+     reloading the page mid-detour has to put them back on the classic level
+     they were on, not on a board they can no longer get to. */
+  loadLevel('bonus', puzzle);
+}
+
+/** turn the offer down, without playing it */
+function declineBonus(slot) {
+  if (BS.bonus) BS.bonus.settle(slot);
+  BS.emit('bonusAnswer', { slot: slot,
+                           puzzle: BS.bonus ? BS.bonus.puzzleFor(slot) : -1,
+                           taken: false });
+  leaveBonus();
+}
+
+/** back to the classic run, from a win, a skip or a decline alike */
+function leaveBonus() {
+  el.win.classList.remove('show');
+  var to = bonusResume;
+  var last = PACKS[to.mode].data.length - 1;
+  var i = Math.min(Math.max(0, to.index), last);
+  setCurrent(to.mode, i);
+  sfx('ui');
+  loadLevel(to.mode, i);
 }
 
 /* ============================== toast =============================== */
@@ -2118,6 +2409,16 @@ BS.board = {
     ask: askSkip,
     take: doSkip
   },
+  /** the special level offered between two classic ones - see src/bonus.js */
+  special: {
+    take: startBonus,
+    decline: declineBonus,
+    /** where the classic run resumes when this detour ends */
+    resume: function () { return { mode: bonusResume.mode, index: bonusResume.index }; },
+    on: function () { return S.mode === 'bonus'; },
+    /** draw a still of the offered board into `host` */
+    preview: function (host, puzzle) { previewInto(host, 'bonus', puzzle); }
+  },
   /** levels dealt face down - see the face-down section above */
   question: {
     on: function () { return !!S.question; },
@@ -2193,6 +2494,10 @@ BS.board = {
       applyAudioPrefs(false);
     },
     get hostMute() { return AU.hostMute; },
+    /** which loop is playing: 'calm', or 'arcade' on the levels that get it */
+    get track() { return MUS.name; },
+    /** exposed for the tests: which loop a level would play */
+    trackFor: trackFor,
     get sfxOn() { return AU.sfxOn; },
     set sfxOn(v) { AU.sfxOn = v; },
     get musicOn() { return AU.musicOn; },

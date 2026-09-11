@@ -200,8 +200,34 @@ $$('[data-close]').forEach(function (b) {
 });
 $$('.overlay').forEach(function (o) {
   if (o.id === 'winOverlay') return;           /* the win panel is modal */
+  /* ⚠ So is the special-level offer, and for a harder reason: the win panel
+     is already gone by the time it appears and no level has been advanced to
+     yet, so a backdrop tap that merely hid it would strand the player on an
+     empty screen. Both buttons settle the slot; nothing else may close it. */
+  if (o.id === 'bonusOverlay') return;
   o.addEventListener('click', function (e) { if (e.target === o) closeOverlay(o); });
 });
+
+/* ====================== special level, between two ==================== */
+
+/* The board decides when one is due and where the run resumes; this only puts
+   the offer on screen and reports which button was pressed. See src/bonus.js. */
+var bonusSlot = 0;
+BS.on('bonusOffer', function (info) {
+  bonusSlot = info.slot | 0;
+  board.special.preview($('#bonusBoard'), info.puzzle);
+  openOverlay('#bonusOverlay');
+});
+$('#bonusPlay').onclick = function () {
+  closeOverlay($('#bonusOverlay'));
+  board.sfx('ui');
+  board.special.take(bonusSlot);
+};
+$('#bonusSkip').onclick = function () {
+  closeOverlay($('#bonusOverlay'));
+  board.sfx('ui');
+  board.special.decline(bonusSlot);
+};
 
 /* ---------------------------- daily reward --------------------------- */
 
@@ -266,12 +292,6 @@ $('#optAlert').onchange = function () {
     : 'No more stuck alerts');
 };
 
-$('#btnReset').onclick = function () {
-  if (!window.confirm('Erase all progress, coins and items? This cannot be undone.')) return;
-  save.reset();
-  location.reload();
-};
-
 /* ============================ back buttons ========================== */
 
 /* the game screen has no back arrow any more: the gear opens settings, and
@@ -293,7 +313,9 @@ $$('[data-back]').forEach(function (b) {
 document.addEventListener('keydown', function (e) {
   if (e.target.tagName === 'INPUT') return;
   if (e.key !== 'Escape') return;
-  var open = $$('.overlay.show').filter(function (o) { return o.id !== 'winOverlay'; })[0];
+  var open = $$('.overlay.show').filter(function (o) {
+    return o.id !== 'winOverlay' && o.id !== 'bonusOverlay';
+  })[0];
   if (open) { closeOverlay(open); return; }
   if (current !== 'home') show('home');
 });
@@ -305,9 +327,23 @@ document.addEventListener('keydown', function (e) {
    straight away and nothing about the boot changes. */
 BS.whenReady(function () {
 
-mode = 'classic';
+mode = (BS.playtest && BS.playtest.mode) || 'classic';
 page = Math.floor(save.level(mode) / PER_PAGE);
 paintWallet();
+
+/* A playtest link lands on the level grid of the mode it named - that grid is
+   the whole point of the link, and the home screen's PLAY button would only
+   send them back to level 1. See src/playtest.js. */
+if (BS.playtest) {
+  if (BS.playtest.level >= 0) {
+    page = Math.floor(BS.playtest.level / PER_PAGE);
+    play(mode, BS.playtest.level);
+  } else {
+    page = 0;
+    show('levels');
+  }
+  return;
+}
 
 /* Straight into the level for a returning player; the home screen for a
    first visit, so the first thing they see is the game's own face. */

@@ -16,11 +16,12 @@ npm run build:crazy
 It refuses nothing quietly. It must print:
 
 ```
-Ban "crazy": 27 file · 2.37 MB
+Ban "crazy": 29 file · 2.38 MB
   ✓ duoi 20 MB - du dieu kien len trang chu ban mobile
   ✓ duong dan tuong doi
   ✓ co SDK CrazyGames (2 file)
   ✓ khong co tests, scripts, Manythings, node_modules, .git
+  ✓ khong co link playtest
 ```
 
 Then check the bundle actually boots — not the dev server, the built files:
@@ -28,6 +29,13 @@ Then check the bundle actually boots — not the dev server, the built files:
 ```bash
 npm run dev          # in another terminal
 # open http://localhost:5180/tests/crazy.html
+```
+
+⚠ **If the level data changed, regenerate the special-level slots first.**
+`data/bonus.js` is built from the level tables, not written by hand:
+
+```bash
+npm run gen:bonus
 ```
 
 That suite drives `dist/` rather than the source: it proves the platform layer
@@ -131,6 +139,11 @@ npx firebase-tools deploy --only hosting   # project ballsortcolor-e295a
 
 ⚠ **It must match what the game actually collects.** Add so much as one
 analytics call and that page is wrong the same day.
+
+The game now writes an event log to Firebase Realtime Database
+([src/analytics.js](src/analytics.js)), and the policy has the section that
+describes it. Anything added to a log row — a new field, a new event — has to
+be reflected there before the build ships.
 
 ⚠ **Preview videos: no black bars, no mouse cursor.** Both are on their
 prohibited list. The game is a portrait column and neither store frame is, so

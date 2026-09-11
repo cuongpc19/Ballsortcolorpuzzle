@@ -76,8 +76,8 @@ function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWi
   S().setAlerts(true);
   ok(S().alertsOn() === true, 'bật lại được');
 
-  /* ════════════════════ đánh dấu màn khó ════════════════════ */
-  head('Nhãn màn khó — tính theo kỷ lục của riêng người chơi');
+  /* ════════════════════ mức khó nội bộ ════════════════════ */
+  head('Mức khó — tính theo kỷ lục của riêng người chơi (không hiện ra nữa)');
   ok(D().tier(2, 9, false) === 0, 'mấy màn đầu không gắn nhãn (dưới mốc)', D().tier(2, 9, false));
   D().setPeak(0);
   ok(D().tier(30, 9, false) === 0, 'chưa thắng màn nào thì chưa có gì để so', D().tier(30, 9, false));
@@ -90,26 +90,23 @@ function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWi
   D().setPeak(12);
   ok(D().tier(200, 12, false) === 0, 'người chơi đã quen 12 màu thì 12 màu là thường', D().tier(200, 12, false));
 
-  head('Nhãn hiện đúng trên thanh trên, và lọ bóng hơn');
+  head('Nhưng không dán nhãn HARD lên bất kỳ màn nào nữa');
   D().setPeak(7);
   await open(31);                                   /* 9 màu */
-  ok(B().tier() === 1, 'màn 31 là HARD với người kỷ lục 7 màu', B().tier());
-  ok($(w,'#levelTag').hidden === false, 'nhãn hiện ra');
-  ok($(w,'#levelTag').textContent === 'HARD', 'ghi HARD', $(w,'#levelTag').textContent);
-  ok($(w,'#tubes').classList.contains('hard'), 'lọ được đánh dấu bóng hơn');
-  ok(w.getComputedStyle($(w,'#levelPill .lbl')).display === 'none',
-     'chữ "Level" nhường chỗ cho nhãn nên không đụng nút Chơi lại');
-  D().setPeak(12);
-  await open(31);
-  ok(B().tier() === 0, 'cùng màn đó với người quen 12 màu thì là thường', B().tier());
-  ok($(w,'#levelTag').hidden === true, 'nhãn biến mất');
-  ok(!$(w,'#tubes').classList.contains('hard'), 'lọ trở lại bình thường');
+  ok(B().tier() === 1, 'màn 31 vẫn được tính là khó (DDA và analytics còn dùng)', B().tier());
+  ok($(w,'#levelTag').hidden === true, 'nhưng thanh trên không còn nhãn', $(w,'#levelTag').textContent);
+  ok($(w,'#levelTag').textContent === '', 'và chữ cũ đã được xoá', $(w,'#levelTag').textContent);
+  ok(!$(w,'#tubes').classList.contains('hard'), 'lọ cũng không bóng hơn');
+  ok(!$(w,'#tubes').classList.contains('superhard'), 'và không còn superhard');
+  ok(w.getComputedStyle($(w,'#levelPill .lbl')).display !== 'none',
+     'chữ "Level" được giữ nguyên chỗ');
 
-  head('Màn úp bi luôn được coi là khó hơn');
+  head('Màn úp bi vẫn khó hơn, chỉ là không khoe ra');
   D().setPeak(12);
   await open(18);                                   /* 7 màu + úp bi */
   ok(B().question.on(), 'màn 18 đúng là màn úp bi');
-  ok(B().tier() >= 1, 'nên vẫn được gắn nhãn', B().tier());
+  ok(B().tier() >= 1, 'vẫn được tính khó bên trong', B().tier());
+  ok($(w,'#levelTag').hidden === true, 'và vẫn không có nhãn');
 
   /* ════════════════════ bi xu ════════════════════ */
   head('Bi xu — chỉ từ màn 5, và cố định theo màn');
@@ -122,7 +119,7 @@ function boot(seed){return new Promise(res=>{fr.onload=()=>{const w=fr.contentWi
   if (coinLv) {
     await open(coinLv);
     const worth = B().lucky();
-    ok([10,20].includes(worth), 'đáng 10 hoặc 20 xu', worth);
+    ok(worth === 5, 'đáng đúng 5 xu', worth);
     ok($$(w,'.ball .ballCoin').length === 1, 'đúng một bi đeo xu', $$(w,'.ball .ballCoin').length);
     await open(1); await open(coinLv);
     ok(B().lucky() === worth, 'mở lại vẫn đúng màn đó, đúng giá đó', B().lucky());
